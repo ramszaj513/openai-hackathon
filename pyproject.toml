@@ -39,7 +39,8 @@ where = ["backend/src"]
 [tool.pytest.ini_options]
 addopts = "-q"
 asyncio_mode = "auto"
-testpaths = ["backend/tests"]
+testpaths = ["backend/tests", "frontend/tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
