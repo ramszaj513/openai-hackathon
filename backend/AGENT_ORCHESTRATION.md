@@ -69,14 +69,17 @@ MCP_BASE_URL=http://127.0.0.1:8000/mcp
 
 This uses the OpenAI Agents SDK for structured intent and read-only MCP offer planning. Sensitive trace payloads remain disabled by the project environment settings.
 
-### Offline deterministic mode
+### Model-disabled infrastructure mode
 
 ```text
 AGENT_USE_OPENAI=0
 AGENT_USE_MCP=0
 ```
 
-This uses the rule-based interpreter, deterministic offer planner, and direct merchant adapter. It exists for tests and local work without API credentials, not as the final hackathon story.
+This keeps commerce, trust, payment, REST, and direct merchant infrastructure available without
+pretending to understand natural language. Starting an agent transaction returns a clear model
+configuration error. Tests inject already-structured intents instead of maintaining a second
+keyword-based parser.
 
 ### MCP without model calls
 
@@ -85,13 +88,15 @@ AGENT_USE_OPENAI=0
 AGENT_USE_MCP=1
 ```
 
-This mode is useful for verifying the normalized merchant protocol independently of model behavior.
+This mode is useful for verifying the normalized merchant protocol independently of model behavior;
+it does not interpret user purchase requests.
 
 ## Transaction states
 
 ```text
 INTENT_CAPTURED
 -> CLARIFICATION_REQUIRED or DISCOVERING
+-> NO_MATCH (terminal, confident catalog result)
 -> OFFER_SELECTED
 -> CHECKOUT_DRAFT
 -> APPROVAL_PENDING

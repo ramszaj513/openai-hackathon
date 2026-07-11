@@ -5,14 +5,12 @@ from datetime import datetime
 from agent_commerce.api import create_app
 from agent_commerce.commerce.models import SearchOffersRequest
 from agent_commerce.commerce.service import CommerceService
-from agent_commerce.orchestration.brain import (
-    DeterministicOfferPlanner,
-    RuleBasedIntentInterpreter,
-)
+from agent_commerce.orchestration.brain import DeterministicOfferPlanner
 from agent_commerce.orchestration.merchant_gateway import DirectMerchantGateway
 from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments.service import PaymentService
 from agent_commerce.trust.service import TrustService
+from conftest import StaticIntentInterpreter, canonical_intent
 from fastapi.testclient import TestClient
 from mcp.types import LATEST_PROTOCOL_VERSION
 
@@ -188,7 +186,7 @@ def test_agent_api_runs_to_approval_and_executes_after_consent(
         merchant=gateway,
         trust=trust,
         payments=payments,
-        intent_interpreter=RuleBasedIntentInterpreter(today=now.date()),
+        intent_interpreter=StaticIntentInterpreter(canonical_intent(now)),
         offer_planner=DeterministicOfferPlanner(gateway),
     )
     app = create_app(service, trust, payments, orchestrator)

@@ -23,9 +23,11 @@ ALLOWED_TRANSITIONS: dict[TransactionState, set[TransactionState]] = {
         TransactionState.FAILED,
     },
     TransactionState.DISCOVERING: {
+        TransactionState.NO_MATCH,
         TransactionState.OFFER_SELECTED,
         TransactionState.FAILED,
     },
+    TransactionState.NO_MATCH: set(),
     TransactionState.OFFER_SELECTED: {
         TransactionState.CHECKOUT_DRAFT,
         TransactionState.FAILED,

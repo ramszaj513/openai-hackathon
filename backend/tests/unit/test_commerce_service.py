@@ -11,9 +11,14 @@ from agent_commerce.commerce.models import (
     CompleteCheckoutRequest,
     CreateCheckoutRequest,
     CreateReturnRequest,
+    DeliveryOption,
+    Money,
+    Offer,
     OfferSelection,
     OrderState,
     PaymentAuthorizationReference,
+    Product,
+    ReturnPolicy,
     SearchOffersRequest,
     SetOrderStateRequest,
     UpdateCheckoutRequest,
@@ -81,6 +86,52 @@ def test_canonical_search_returns_only_eligible_offer(
     offers = service.search_offers(canonical_search(now))
 
     assert [offer.offer_id for offer in offers] == ["offer-studio-27-usbc"]
+
+
+def test_catalog_search_is_product_agnostic(service: CommerceService, now: datetime) -> None:
+    service.repository.save_offer(
+        Offer(
+            offer_id="offer-audio-wireless",
+            merchant_id="merchant-demo-audio",
+            product=Product(
+                product_id="headphones-quiet-1",
+                name="QuietSound Wireless Headphones",
+                category="headphones",
+                brand="QuietSound",
+                description="Over-ear headphones with active noise cancelling.",
+                attributes={"wireless": True, "noise_cancelling": True},
+            ),
+            variant="midnight",
+            unit_price=Money(amount_minor=79900, currency="PLN"),
+            available_quantity=4,
+            delivery_options=(
+                DeliveryOption(
+                    delivery_option_id="audio-standard",
+                    label="Standard delivery",
+                    price_minor=0,
+                    estimated_delivery_date=now.date() + timedelta(days=2),
+                ),
+            ),
+            return_policy=ReturnPolicy(
+                returnable=True,
+                window_days=30,
+                description="Returns accepted within 30 days.",
+            ),
+            version=1,
+            expires_at=now + timedelta(days=1),
+        )
+    )
+
+    matches = service.search_offers(
+        SearchOffersRequest(
+            query="wireless noise cancelling headphones",
+            category="HEADPHONES",
+        )
+    )
+    no_matches = service.search_offers(SearchOffersRequest(query="espresso machine"))
+
+    assert [offer.offer_id for offer in matches] == ["offer-audio-wireless"]
+    assert no_matches == []
 
 
 def test_checkout_reserves_inventory_and_is_idempotent(service: CommerceService) -> None:

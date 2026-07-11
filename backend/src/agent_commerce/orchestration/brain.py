@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import re
-from datetime import date, timedelta
+from datetime import date
 from typing import Protocol
 
 from agents import Agent, ModelSettings, RunConfig, Runner
@@ -55,64 +54,6 @@ class OfferPlanner(Protocol):
     async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan: ...
 
 
-class RuleBasedIntentInterpreter:
-    """Offline-safe interpreter for tests and deterministic demo fallback."""
-
-    def __init__(self, *, today: date | None = None) -> None:
-        self.today = today or date.today()
-
-    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
-        lower = raw_request.casefold()
-        category = "monitor" if "monitor" in lower or "display" in lower else ""
-        budget, currency = self._extract_budget(raw_request)
-        return_days_match = re.search(r"(\d+)\s*[- ]?day\s+return", lower)
-        return_days = int(return_days_match.group(1)) if return_days_match else None
-        latest_delivery = self.today + timedelta(days=1) if "tomorrow" in lower else None
-        required_attributes: dict[str, str | bool | int] = {}
-        if "mac" in lower or "macbook" in lower:
-            required_attributes["mac_compatible"] = True
-        if "usb-c" in lower or "usb c" in lower:
-            required_attributes["usb_c"] = True
-        missing: list[str] = []
-        questions: list[str] = []
-        if not category:
-            missing.append("category")
-            questions.append("What type of product should I buy?")
-        if budget is None:
-            missing.append("max_budget_minor")
-            questions.append("What is the maximum total budget and currency?")
-        return NormalizedPurchaseIntent(
-            product_query=raw_request,
-            category=category or "unknown",
-            max_budget_minor=budget,
-            currency=currency,
-            required_attributes=required_attributes,
-            latest_delivery_date=latest_delivery,
-            minimum_return_window_days=return_days,
-            purchase_if_confident=(
-                "buy it" in lower or "purchase it" in lower or "order it" in lower
-            ),
-            missing_required_fields=tuple(missing),
-            clarification_questions=tuple(questions),
-        )
-
-    @staticmethod
-    def _extract_budget(raw_request: str) -> tuple[int | None, str]:
-        match = re.search(
-            r"(?:under|no more than|max(?:imum)?(?: of)?)\s+([\d., ]+)\s*(PLN|USD|EUR)",
-            raw_request,
-            flags=re.IGNORECASE,
-        )
-        if match:
-            major = int(re.sub(r"\D", "", match.group(1)))
-            return major * 100, match.group(2).upper()
-        dollar = re.search(r"(?:under|no more than|max(?:imum)?)\s+\$([\d.,]+)", raw_request)
-        if dollar:
-            major = int(re.sub(r"\D", "", dollar.group(1)))
-            return major * 100, "USD"
-        return None, "PLN"
-
-
 class DeterministicOfferPlanner:
     """Deterministic constraint evaluator over a merchant gateway."""
 
@@ -122,8 +63,7 @@ class DeterministicOfferPlanner:
     async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan:
         offers = await self.merchant.search_offers(
             SearchOffersRequest(
-                query=None,
-                category=intent.category,
+                query=intent.product_query,
                 currency=intent.currency,
                 quantity=intent.quantity,
             )
@@ -137,14 +77,19 @@ class DeterministicOfferPlanner:
             elif delivery_id is not None:
                 eligible.append((total, offer, delivery_id))
         if not eligible:
+            reason = (
+                f"No merchant catalog offers match '{intent.product_query}'."
+                if not offers
+                else "Relevant offers were found, but none satisfies every hard constraint."
+            )
             return OfferSelectionPlan(
                 selected_offer_id=None,
-                confidence=0,
-                selection_reason="No offer satisfies all hard constraints.",
+                confidence=1,
+                selection_reason=reason,
                 rejected_offers=tuple(rejected),
             )
         _, selected, delivery_id = min(eligible, key=lambda item: item[0])
-        constraints = ["category", "stock", "budget"]
+        constraints = ["product relevance", "stock", "budget"]
         if intent.required_attributes:
             constraints.append("compatibility")
         if intent.latest_delivery_date:
@@ -222,7 +167,10 @@ class OpenAIIntentInterpreter:
                 "Amounts use integer minor units. Treat category and maximum budget/currency "
                 "as required before an autonomous purchase. Do not invent missing values; "
                 "list missing fields and concise clarification questions. Resolve relative "
-                "dates only against the current date supplied with the request."
+                "dates only against the current date supplied with the request. Set "
+                "product_query to a concise, product-focused search phrase, not the full user "
+                "sentence. Infer category and arbitrary product attributes from meaning; do not "
+                "rely on a fixed catalog or predefined product vocabulary."
             ),
             output_type=PurchaseIntentOutput,
         )
@@ -297,7 +245,10 @@ class OpenAIOfferPlanner:
                     "Use only the read-only merchant tools. Discover offers broadly enough to "
                     "explain rejected alternatives, enforce every hard constraint, calculate "
                     "the delivered total, and select an offer only when all hard constraints "
-                    "are satisfied. Never create or complete checkout in this planning step."
+                    "are satisfied. Search by the intent's product meaning and attributes; never "
+                    "assume a fixed product category. If an exhaustive search finds no suitable "
+                    "offer, return no selection with high confidence and a concise explanation. "
+                    "Never create or complete checkout in this planning step."
                 ),
                 output_type=OfferSelectionPlan,
             )

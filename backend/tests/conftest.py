@@ -9,10 +9,18 @@ from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.repository import InMemoryCommerceRepository
 from agent_commerce.commerce.seed import build_seed_offers
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.orchestration.models import NormalizedPurchaseIntent
 from agent_commerce.payments import PaymentService
 from agent_commerce.payments.repository import InMemoryPaymentRepository
 from agent_commerce.trust import TrustService
 from agent_commerce.trust.repository import InMemoryTrustRepository
+
+
+@pytest.fixture(autouse=True)
+def disable_external_agent_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unit and integration tests never depend on developer API credentials."""
+    monkeypatch.setenv("AGENT_USE_OPENAI", "0")
+    monkeypatch.setenv("AGENT_USE_MCP", "0")
 
 
 @dataclass
@@ -24,6 +32,40 @@ class MutableClock:
 
     def advance(self, **delta: int) -> None:
         self.current += timedelta(**delta)
+
+
+@dataclass(frozen=True)
+class StaticIntentInterpreter:
+    """Test double that returns an already-normalized model result."""
+
+    intent: NormalizedPurchaseIntent
+
+    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
+        return self.intent
+
+
+def canonical_intent(
+    now: datetime,
+    *,
+    max_budget_minor: int | None = 120000,
+    missing_required_fields: tuple[str, ...] = (),
+) -> NormalizedPurchaseIntent:
+    return NormalizedPurchaseIntent(
+        product_query="Mac-compatible USB-C monitor",
+        category="monitor",
+        max_budget_minor=max_budget_minor,
+        currency="PLN",
+        required_attributes={"mac_compatible": True},
+        latest_delivery_date=now.date() + timedelta(days=1),
+        minimum_return_window_days=30,
+        purchase_if_confident=True,
+        missing_required_fields=missing_required_fields,
+        clarification_questions=(
+            ("What is the maximum total budget and currency?",)
+            if "max_budget_minor" in missing_required_fields
+            else ()
+        ),
+    )
 
 
 @pytest.fixture

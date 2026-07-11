@@ -11,10 +11,7 @@ from agent_commerce.commerce.models import (
     SetOrderStateRequest,
 )
 from agent_commerce.commerce.service import CommerceService
-from agent_commerce.orchestration.brain import (
-    DeterministicOfferPlanner,
-    RuleBasedIntentInterpreter,
-)
+from agent_commerce.orchestration.brain import DeterministicOfferPlanner
 from agent_commerce.orchestration.merchant_gateway import (
     AmbiguousMerchantError,
     DirectMerchantGateway,
@@ -22,6 +19,7 @@ from agent_commerce.orchestration.merchant_gateway import (
 from agent_commerce.orchestration.models import (
     ApproveTransactionRequest,
     CancelTransactionRequest,
+    NormalizedPurchaseIntent,
     ReturnTransactionRequest,
     StartPurchaseRequest,
     TransactionState,
@@ -32,7 +30,7 @@ from agent_commerce.payments.models import PaymentScenario, PaymentStatus
 from agent_commerce.payments.service import PaymentService
 from agent_commerce.trust.models import CreateSpendingMandateRequest
 from agent_commerce.trust.service import TrustService
-from conftest import MutableClock
+from conftest import MutableClock, StaticIntentInterpreter, canonical_intent
 
 CANONICAL_REQUEST = (
     "Buy a Mac-compatible monitor for no more than 1,200 PLN, deliverable tomorrow, "
@@ -48,6 +46,7 @@ def build_orchestrator(
     clock: MutableClock,
     now: datetime,
     gateway: DirectMerchantGateway | None = None,
+    intent: NormalizedPurchaseIntent | None = None,
 ) -> CommerceOrchestrator:
     merchant = gateway or DirectMerchantGateway(service)
     ids = count(1)
@@ -55,7 +54,7 @@ def build_orchestrator(
         merchant=merchant,
         trust=trust,
         payments=payments,
-        intent_interpreter=RuleBasedIntentInterpreter(today=now.date()),
+        intent_interpreter=StaticIntentInterpreter(intent or canonical_intent(now)),
         offer_planner=DeterministicOfferPlanner(merchant),
         repository=InMemoryTransactionRepository(),
         audit=audit,
@@ -93,7 +92,19 @@ async def test_missing_budget_requires_clarification_without_checkout(
     clock: MutableClock,
     now: datetime,
 ) -> None:
-    orchestrator = build_orchestrator(service, trust, payments, audit, clock, now)
+    orchestrator = build_orchestrator(
+        service,
+        trust,
+        payments,
+        audit,
+        clock,
+        now,
+        intent=canonical_intent(
+            now,
+            max_budget_minor=None,
+            missing_required_fields=("max_budget_minor",),
+        ),
+    )
 
     transaction = await orchestrator.start(
         StartPurchaseRequest(
@@ -182,7 +193,15 @@ async def test_agent_does_not_buy_when_no_offer_meets_budget(
     clock: MutableClock,
     now: datetime,
 ) -> None:
-    orchestrator = build_orchestrator(service, trust, payments, audit, clock, now)
+    orchestrator = build_orchestrator(
+        service,
+        trust,
+        payments,
+        audit,
+        clock,
+        now,
+        intent=canonical_intent(now, max_budget_minor=50000),
+    )
 
     transaction = await orchestrator.start(
         StartPurchaseRequest(
@@ -195,8 +214,53 @@ async def test_agent_does_not_buy_when_no_offer_meets_budget(
         )
     )
 
-    assert transaction.state is TransactionState.FAILED
-    assert transaction.last_error_code == "NO_ELIGIBLE_OFFER"
+    assert transaction.state is TransactionState.NO_MATCH
+    assert transaction.selection is not None
+    assert transaction.selection.selected_offer_id is None
+    assert transaction.selection.confidence == 1
+    assert "none satisfies" in transaction.selection.selection_reason
+    assert transaction.last_error_code is None
+
+
+@pytest.mark.asyncio
+async def test_agent_confidently_reports_product_absent_from_catalog(
+    service: CommerceService,
+    trust: TrustService,
+    payments: PaymentService,
+    audit: AuditLedger,
+    clock: MutableClock,
+    now: datetime,
+) -> None:
+    intent = NormalizedPurchaseIntent(
+        product_query="wireless noise cancelling headphones",
+        category="headphones",
+        max_budget_minor=100000,
+        currency="PLN",
+        purchase_if_confident=True,
+    )
+    orchestrator = build_orchestrator(
+        service,
+        trust,
+        payments,
+        audit,
+        clock,
+        now,
+        intent=intent,
+    )
+
+    transaction = await orchestrator.start(
+        StartPurchaseRequest(
+            user_id="user-1",
+            agent_id="agent-1",
+            raw_request="Any natural-language request is interpreted upstream by the model.",
+            idempotency_key="product-not-stocked",
+        )
+    )
+
+    assert transaction.state is TransactionState.NO_MATCH
+    assert transaction.selection is not None
+    assert transaction.selection.confidence == 1
+    assert "wireless noise cancelling headphones" in transaction.selection.selection_reason
 
 
 @pytest.mark.asyncio

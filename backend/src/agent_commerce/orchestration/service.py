@@ -134,10 +134,11 @@ class CommerceOrchestrator:
             )
             selection = await self.offer_planner.select(intent)
             if selection.selected_offer_id is None:
-                transaction = self._fail(
+                transaction = self._transition(
                     transaction,
-                    "NO_ELIGIBLE_OFFER",
+                    TransactionState.NO_MATCH,
                     selection.selection_reason,
+                    updates={"selection": selection},
                 )
                 return self._cache_start(request, fingerprint, transaction)
             offer = await self.merchant.get_offer(selection.selected_offer_id)

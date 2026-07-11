@@ -57,3 +57,16 @@ def test_factory_rejects_unknown_reasoning_effort(
 
     with pytest.raises(RuntimeError, match="OPENAI_REASONING_EFFORT must be one of"):
         create_default_orchestrator(service, trust, payments)
+
+
+def test_factory_requires_api_key_for_model_intent_interpretation(
+    monkeypatch: pytest.MonkeyPatch,
+    service: CommerceService,
+    trust: TrustService,
+    payments: PaymentService,
+) -> None:
+    monkeypatch.setenv("AGENT_USE_OPENAI", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY is required"):
+        create_default_orchestrator(service, trust, payments)

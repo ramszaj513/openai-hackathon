@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from typing import TypeVar
@@ -41,6 +42,29 @@ from agent_commerce.commerce.repository import CommerceRepository, InMemoryComme
 from agent_commerce.commerce.seed import build_seed_offers
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+SEARCH_TOKEN_PATTERN = re.compile(r"[^\W_]+", flags=re.UNICODE)
+
+
+def _search_tokens(value: str) -> set[str]:
+    return set(SEARCH_TOKEN_PATTERN.findall(value.casefold().replace("_", " ")))
+
+
+def _matches_product_query(offer: Offer, query: str) -> bool:
+    requested = _search_tokens(query)
+    if not requested:
+        return False
+    attributes = " ".join(f"{key} {value}" for key, value in offer.product.attributes.items())
+    searchable = " ".join(
+        (
+            offer.product.name,
+            offer.product.category,
+            offer.product.brand,
+            offer.product.description,
+            offer.variant,
+            attributes,
+        )
+    )
+    return requested <= _search_tokens(searchable)
 
 
 class CommerceService:
@@ -77,30 +101,23 @@ class CommerceService:
     def search_offers(self, request: SearchOffersRequest) -> list[Offer]:
         now = self._now()
         matches: list[Offer] = []
-        query = request.query.casefold() if request.query else None
         for offer in self.repository.list_offers():
             if offer.expires_at <= now or offer.available_quantity < request.quantity:
                 continue
             if offer.unit_price.currency != request.currency:
                 continue
-            if request.category and offer.product.category != request.category:
+            if (
+                request.category
+                and offer.product.category.casefold() != request.category.casefold()
+            ):
                 continue
             if (
                 request.max_unit_price_minor is not None
                 and offer.unit_price.amount_minor > request.max_unit_price_minor
             ):
                 continue
-            if query:
-                text = " ".join(
-                    (
-                        offer.product.name,
-                        offer.product.brand,
-                        offer.product.description,
-                        offer.variant,
-                    )
-                ).casefold()
-                if query not in text:
-                    continue
+            if request.query and not _matches_product_query(offer, request.query):
+                continue
             if any(
                 offer.product.attributes.get(key) != value
                 for key, value in request.required_attributes.items()
