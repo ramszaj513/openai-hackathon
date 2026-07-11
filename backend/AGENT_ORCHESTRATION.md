@@ -62,7 +62,8 @@ It cannot call checkout completion or payment tools.
 AGENT_USE_OPENAI=1
 AGENT_USE_MCP=1
 OPENAI_API_KEY=...
-OPENAI_MODEL=...
+OPENAI_MODEL=gpt-5.6-sol
+OPENAI_REASONING_EFFORT=high
 MCP_BASE_URL=http://127.0.0.1:8000/mcp
 ```
 

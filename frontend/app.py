@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 import streamlit as st
+from agent_commerce.environment import load_local_environment
 from api_client import BackendAPIError, CommerceAPIClient
 from demo_flow import (
     CANONICAL_REQUEST,
@@ -19,6 +20,8 @@ from demo_flow import (
     select_delivery,
     select_offer,
 )
+
+load_local_environment()
 
 st.set_page_config(
     page_title="Arc · Agent Commerce",

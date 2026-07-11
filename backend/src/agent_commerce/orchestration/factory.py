@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+from typing import cast
+
+from openai.types.shared.reasoning_effort import ReasoningEffort
 
 from agent_commerce.commerce.service import CommerceService
 from agent_commerce.orchestration.brain import (
@@ -21,6 +24,8 @@ from agent_commerce.orchestration.merchant_gateway import (
 from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments import PaymentService
 from agent_commerce.trust import TrustService
+
+VALID_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 
 def create_default_orchestrator(
@@ -45,8 +50,13 @@ def create_default_orchestrator(
         model = os.getenv("OPENAI_MODEL")
         if not model:
             raise RuntimeError("OPENAI_MODEL is required when AGENT_USE_OPENAI is enabled")
-        interpreter = OpenAIIntentInterpreter(model)
-        planner = OpenAIOfferPlanner(model, mcp_url)
+        configured_effort = os.getenv("OPENAI_REASONING_EFFORT", "high").lower()
+        if configured_effort not in VALID_REASONING_EFFORTS:
+            allowed = ", ".join(sorted(VALID_REASONING_EFFORTS))
+            raise RuntimeError(f"OPENAI_REASONING_EFFORT must be one of: {allowed}")
+        reasoning_effort = cast(ReasoningEffort, configured_effort)
+        interpreter = OpenAIIntentInterpreter(model, reasoning_effort)
+        planner = OpenAIOfferPlanner(model, mcp_url, reasoning_effort)
     else:
         interpreter = RuleBasedIntentInterpreter()
         planner = DeterministicOfferPlanner(merchant)

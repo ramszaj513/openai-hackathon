@@ -9,6 +9,8 @@ from typing import Protocol
 
 from agents import Agent, ModelSettings, RunConfig, Runner
 from agents.mcp import create_static_tool_filter
+from openai.types.shared import Reasoning
+from openai.types.shared.reasoning_effort import ReasoningEffort
 
 from agent_commerce.commerce.models import Offer, SearchOffersRequest
 from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
@@ -175,11 +177,14 @@ class DeterministicOfferPlanner:
 class OpenAIIntentInterpreter:
     """Structured intent extraction using the OpenAI Agents SDK."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, reasoning_effort: ReasoningEffort) -> None:
         self.agent = Agent(
             name="Purchase intent interpreter",
             model=model,
-            model_settings=ModelSettings(temperature=0),
+            model_settings=ModelSettings(
+                reasoning=Reasoning(effort=reasoning_effort),
+                verbosity="low",
+            ),
             instructions=(
                 "Convert the user's purchase request into the supplied structured schema. "
                 "Amounts use integer minor units. Treat category and maximum budget/currency "
@@ -207,9 +212,15 @@ class OpenAIIntentInterpreter:
 class OpenAIOfferPlanner:
     """Read-only offer discovery and selection through the merchant MCP server."""
 
-    def __init__(self, model: str, mcp_url: str) -> None:
+    def __init__(
+        self,
+        model: str,
+        mcp_url: str,
+        reasoning_effort: ReasoningEffort,
+    ) -> None:
         self.model = model
         self.mcp_url = mcp_url
+        self.reasoning_effort = reasoning_effort
 
     async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan:
         tool_filter = create_static_tool_filter(
@@ -230,7 +241,10 @@ class OpenAIOfferPlanner:
             agent = Agent(
                 name="Commerce offer planner",
                 model=self.model,
-                model_settings=ModelSettings(temperature=0),
+                model_settings=ModelSettings(
+                    reasoning=Reasoning(effort=self.reasoning_effort),
+                    verbosity="low",
+                ),
                 mcp_servers=[server],
                 mcp_config={"convert_schemas_to_strict": True},
                 instructions=(
