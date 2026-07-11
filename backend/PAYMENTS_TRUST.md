@@ -14,6 +14,7 @@ This workstream turns a merchant checkout into a precisely authorized, auditable
 - Merchant-compatible `ApprovalEvidence` bound to checkout ID, version, merchant, amount, currency, and expiry.
 - Single-use, transaction-scoped payment credentials.
 - Provider-neutral payment adapter with a deterministic simulator.
+- Opt-in Stripe test-mode card adapter using PaymentIntents with manual capture.
 - Authorization, decline, capture, void, partial/full refund, and receipts.
 - Idempotency across every consequential trust and payment mutation.
 - Recovery that captures an authorization when reconciliation finds an order, or voids it when no order exists.
@@ -56,6 +57,23 @@ This workstream turns a merchant checkout into a precisely authorized, auditable
 - Capture requires an order ID and the exact authorized amount.
 - An orphan authorization is voided after merchant reconciliation.
 - Refunds cannot exceed captured funds and restore mandate spend capacity.
+- Stripe configuration accepts test keys only; provider client secrets and raw errors never enter
+  application models, audit data, the frontend, or model context.
+- Stripe mutations receive stable hashed idempotency keys, making an ambiguous transport retry safe.
+
+## Selecting the payment rail
+
+The simulator is the default and requires no external service. For Stripe test mode:
+
+```text
+PAYMENT_PROVIDER=stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PAYMENT_METHOD=pm_card_visa
+```
+
+`STRIPE_PAYMENT_METHOD` is a server-side test PaymentMethod identifier, not reusable card data.
+Use `STRIPE_DECLINE_PAYMENT_METHOD` to configure the deterministic decline scenario. The application
+rejects live-mode keys and never returns a Stripe PaymentIntent client secret.
 
 ## Verification
 
@@ -72,4 +90,3 @@ The automated suite includes the complete flow:
 checkout -> proposal -> approval -> credential -> authorization
 -> merchant order -> capture -> receipt -> refund
 ```
-

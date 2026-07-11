@@ -22,6 +22,7 @@ def disable_external_agent_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     """Unit and integration tests never depend on developer API credentials."""
     monkeypatch.setenv("AGENT_USE_OPENAI", "0")
     monkeypatch.setenv("AGENT_USE_MCP", "0")
+    monkeypatch.setenv("PAYMENT_PROVIDER", "simulator")
 
 
 @dataclass
