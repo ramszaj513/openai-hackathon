@@ -9,7 +9,7 @@ Last team sync: _not yet recorded_
 | Workstream | Human owner | Branch | Current outcome being built | Next integration point | Status/blocker |
 |---|---|---|---|---|---|
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | Canonical intent-to-order tool sequence with OpenAI Agents SDK | Search and checkout MCP contract | Not started |
-| Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Search, checkout, and order responses | Not started |
+| Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound approval and Python payment simulator | Approval and payment references for completion | Not started |
 | Experience and integration | Bartosz | `codex/experience` | Streamlit intent, approval, and transaction timeline UI | Walking-skeleton end-to-end flow | Not started |
 
@@ -21,7 +21,7 @@ Record proposed or merged changes that affect another workstream.
 
 | Date/time | Proposed by | Contract or operation | Change | Affected owners | Decision/status |
 |---|---|---|---|---|---|
-| — | — | — | No changes recorded | — | — |
+| 2026-07-11 | Kuba | Commerce REST/MCP contract | Implemented structured offers, versioned checkout, completion authority inputs, order/cancel/return, events, and stable errors | Maciej, Piotr, Bartosz | Ready for review on `codex/commerce-mcp` |
 
 ## Canonical scenario health
 
@@ -31,17 +31,17 @@ The integration owner updates the first failing step. Do not mark later steps he
 |---|---|---|
 | Submit canonical request | Not run | — |
 | Extract structured constraints | Not run | — |
-| Search structured offers | Not run | — |
+| Search structured offers | Passing | Unit, MCP contract, and REST integration tests |
 | Reject invalid offers and select one | Not run | — |
-| Create authoritative checkout | Not run | — |
+| Create authoritative checkout | Passing | Inventory reservation, version, expiry, totals, and idempotency tests |
 | Present checkout proposal | Not run | — |
 | Approve exact checkout version | Not run | — |
 | Authorize scoped payment | Not run | — |
-| Complete checkout idempotently | Not run | — |
+| Complete checkout idempotently | Passing | Exact approval/payment binding and duplicate completion tests |
 | Confirm order and capture payment | Not run | — |
 | Display receipt and timeline | Not run | — |
-| React to post-purchase event | Not run | — |
-| Cancel/return and track refund | Not run | — |
+| React to post-purchase event | Passing | Fulfillment transition and persisted merchant event tests |
+| Cancel/return and track refund | Failing | Commerce emits `refund.pending`; Piotr's refund processing is not integrated yet |
 
 Use status values `Not run`, `Failing`, or `Passing`.
 
@@ -61,4 +61,4 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 
 | Date/time | From | To | Outcome | Changed interfaces | Verification/link |
 |---|---|---|---|---|---|
-| — | — | — | No handoffs recorded | — | — |
+| 2026-07-11 | Kuba | Maciej, Piotr, Bartosz | Commerce service, REST API, and FastMCP surface ready for integration | Models and operations in `docs/shared-contracts.md`; implementation contracts in `backend/src` | `backend/README.md`; commerce test suite |
