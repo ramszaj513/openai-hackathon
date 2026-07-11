@@ -2,10 +2,21 @@ from __future__ import annotations
 
 import pytest
 from agent_commerce.commerce.service import CommerceService
-from agent_commerce.orchestration.brain import OpenAIIntentInterpreter, OpenAIOfferPlanner
+from agent_commerce.orchestration.brain import (
+    OpenAIIntentInterpreter,
+    OpenAIOfferPlanner,
+    PurchaseIntentOutput,
+)
 from agent_commerce.orchestration.factory import create_default_orchestrator
 from agent_commerce.payments.service import PaymentService
 from agent_commerce.trust.service import TrustService
+from agents import AgentOutputSchema
+
+
+def test_model_facing_intent_schema_is_strict() -> None:
+    schema = AgentOutputSchema(PurchaseIntentOutput)
+
+    assert schema.is_strict_json_schema()
 
 
 def test_factory_applies_configured_model_and_reasoning(

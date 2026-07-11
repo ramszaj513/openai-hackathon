@@ -51,6 +51,36 @@ class CommerceAPIClient:
             raise BackendAPIError("INVALID_RESPONSE", "Backend returned an invalid offer list")
         return result
 
+    def start_transaction(self, request: Mapping[str, Any]) -> JsonObject:
+        return self._object_request("POST", "/api/agent/transactions", json=dict(request))
+
+    def get_transaction(self, transaction_id: str) -> JsonObject:
+        return self._object_request("GET", f"/api/agent/transactions/{transaction_id}")
+
+    def approve_transaction(self, transaction_id: str, request: Mapping[str, Any]) -> JsonObject:
+        return self._object_request(
+            "POST",
+            f"/api/agent/transactions/{transaction_id}/approve",
+            json=dict(request),
+        )
+
+    def resume_transaction(self, transaction_id: str) -> JsonObject:
+        return self._object_request("POST", f"/api/agent/transactions/{transaction_id}/resume")
+
+    def cancel_transaction(self, transaction_id: str, request: Mapping[str, Any]) -> JsonObject:
+        return self._object_request(
+            "POST",
+            f"/api/agent/transactions/{transaction_id}/cancel",
+            json=dict(request),
+        )
+
+    def return_transaction(self, transaction_id: str, request: Mapping[str, Any]) -> JsonObject:
+        return self._object_request(
+            "POST",
+            f"/api/agent/transactions/{transaction_id}/return",
+            json=dict(request),
+        )
+
     def create_checkout(self, request: Mapping[str, Any]) -> JsonObject:
         return self._object_request("POST", "/api/checkouts", json=dict(request))
 
@@ -64,6 +94,9 @@ class CommerceAPIClient:
 
     def get_order(self, order_id: str) -> JsonObject:
         return self._object_request("GET", f"/api/orders/{order_id}")
+
+    def get_payment(self, payment_id: str) -> JsonObject:
+        return self._object_request("GET", f"/api/payments/{payment_id}")
 
     def cancel_order(self, order_id: str, idempotency_key: str) -> JsonObject:
         return self._object_request(

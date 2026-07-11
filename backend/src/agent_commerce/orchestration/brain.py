@@ -11,6 +11,7 @@ from agents import Agent, ModelSettings, RunConfig, Runner
 from agents.mcp import create_static_tool_filter
 from openai.types.shared import Reasoning
 from openai.types.shared.reasoning_effort import ReasoningEffort
+from pydantic import Field
 
 from agent_commerce.commerce.models import Offer, SearchOffersRequest
 from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
@@ -18,8 +19,32 @@ from agent_commerce.orchestration.merchant_gateway import MerchantGateway
 from agent_commerce.orchestration.models import (
     NormalizedPurchaseIntent,
     OfferSelectionPlan,
+    OrchestrationModel,
     RejectedOffer,
 )
+
+
+class IntentAttribute(OrchestrationModel):
+    """Strict-schema representation of one requested product attribute."""
+
+    name: str
+    value: str | bool | int
+
+
+class PurchaseIntentOutput(OrchestrationModel):
+    """Model-facing intent schema without an arbitrary-key JSON object."""
+
+    product_query: str
+    category: str
+    quantity: int = Field(gt=0)
+    max_budget_minor: int | None = Field(gt=0)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    required_attributes: tuple[IntentAttribute, ...]
+    latest_delivery_date: date | None
+    minimum_return_window_days: int | None = Field(ge=0)
+    purchase_if_confident: bool
+    missing_required_fields: tuple[str, ...]
+    clarification_questions: tuple[str, ...]
 
 
 class IntentInterpreter(Protocol):
@@ -191,7 +216,7 @@ class OpenAIIntentInterpreter:
                 "as required before an autonomous purchase. Do not invent missing values; "
                 "list missing fields and concise clarification questions."
             ),
-            output_type=NormalizedPurchaseIntent,
+            output_type=PurchaseIntentOutput,
         )
 
     async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
@@ -204,9 +229,22 @@ class OpenAIIntentInterpreter:
                 trace_include_sensitive_data=False,
             ),
         )
-        if not isinstance(result.final_output, NormalizedPurchaseIntent):
+        output = result.final_output
+        if not isinstance(output, PurchaseIntentOutput):
             raise RuntimeError("Intent agent returned an unexpected output type")
-        return result.final_output
+        return NormalizedPurchaseIntent(
+            product_query=output.product_query,
+            category=output.category,
+            quantity=output.quantity,
+            max_budget_minor=output.max_budget_minor,
+            currency=output.currency,
+            required_attributes={item.name: item.value for item in output.required_attributes},
+            latest_delivery_date=output.latest_delivery_date,
+            minimum_return_window_days=output.minimum_return_window_days,
+            purchase_if_confident=output.purchase_if_confident,
+            missing_required_fields=output.missing_required_fields,
+            clarification_questions=output.clarification_questions,
+        )
 
 
 class OpenAIOfferPlanner:
