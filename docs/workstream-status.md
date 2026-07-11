@@ -8,7 +8,7 @@ Last team sync: _not yet recorded_
 
 | Workstream | Human owner | Branch | Current outcome being built | Next integration point | Status/blocker |
 |---|---|---|---|---|---|
-| Agent and orchestration | Maciej | `codex/agent-orchestration` | OpenAI/MCP intent-to-resolution transaction orchestration | Bartosz integrates `AgentTransaction` and approval/event endpoints | Ready to integrate |
+| Agent and orchestration | Maciej | `codex/agent-orchestration` | Agent-based semantic offer matching over broad MCP candidates | Bartosz verifies canonical live-agent selection in the UI | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
 | Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
