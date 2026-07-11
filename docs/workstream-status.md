@@ -11,7 +11,7 @@ Last team sync: _not yet recorded_
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | Canonical intent-to-order tool sequence with OpenAI Agents SDK | Search and checkout MCP contract | Not started |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound approval and Python payment simulator | Approval and payment references for completion | Not started |
-| Experience and integration | Bartosz | `codex/experience` | Streamlit intent, approval, and transaction timeline UI | Walking-skeleton end-to-end flow | Not started |
+| Experience and integration | Bartosz | `codex/experience` | Streamlit intent, exact checkout approval, and transaction timeline UI with live-commerce and deterministic demo modes | Walking-skeleton end-to-end flow | In progress |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
