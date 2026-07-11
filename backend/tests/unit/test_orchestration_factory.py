@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from agent_commerce.commerce.service import CommerceService
 from agent_commerce.orchestration.brain import (
+    OfferDisplayParametersOutput,
     OpenAIIntentInterpreter,
     OpenAIOfferPlanner,
     PurchaseIntentOutput,
@@ -15,6 +16,12 @@ from agents import AgentOutputSchema
 
 def test_model_facing_intent_schema_is_strict() -> None:
     schema = AgentOutputSchema(PurchaseIntentOutput)
+
+    assert schema.is_strict_json_schema()
+
+
+def test_offer_display_parameters_schema_is_strict() -> None:
+    schema = AgentOutputSchema(OfferDisplayParametersOutput)
 
     assert schema.is_strict_json_schema()
 

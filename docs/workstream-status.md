@@ -8,7 +8,7 @@ Last team sync: _not yet recorded_
 
 | Workstream | Human owner | Branch | Current outcome being built | Next integration point | Status/blocker |
 |---|---|---|---|---|---|
-| Agent and orchestration | Maciej | `codex/agent-orchestration` | Agent-based semantic offer matching over broad MCP candidates | Bartosz verifies canonical live-agent selection in the UI | Ready to integrate |
+| Agent and orchestration | Maciej | `codex/agent-orchestration` | Agent-generated four-parameter summary after semantic offer match | Bartosz verifies the live-agent wording in the UI | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Stripe Elements card entry feeding a safe PaymentMethod ID into exact-checkout authorization | Bartosz verifies card entry and the canonical purchase in the browser | In progress |
 | Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
@@ -27,6 +27,7 @@ Record proposed or merged changes that affect another workstream.
 | 2026-07-11 | Bartosz workstream | Frontend runtime and interaction model | Replace Streamlit's phased screens with a React/TypeScript single-chat UI; keep the existing REST transaction contract unchanged | All contributors (local setup), Maciej (API consumer) | Implemented and verified; ready for review |
 | 2026-07-11 | Piotr workstream | Refund status contract | Add compatible `PENDING` and `FAILED` states so asynchronous Stripe refunds are not reported as completed; restore mandate spend only on `COMPLETED` | Maciej, Bartosz, Piotr | Implemented with contract and lifecycle tests; ready for review |
 | 2026-07-11 | Piotr/Bartosz workstreams | Interactive payment handoff | Allow exact-checkout approval to carry a validated Stripe Elements `pm_...` ID for one authorization attempt; never persist it or accept raw card fields | Maciej, Piotr, Bartosz | Implemented; browser verification pending publishable test key |
+| 2026-07-11 | Maciej workstream | Agent selection projection | Add four agent-generated `{label, value}` display parameters after a successful semantic match; UI renders the list without interpreting attribute names | Bartosz | Implemented and covered by backend contract/orchestration and frontend rendering tests |
 
 ## Canonical scenario health
 

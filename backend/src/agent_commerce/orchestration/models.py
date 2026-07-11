@@ -60,6 +60,11 @@ class RejectedOffer(OrchestrationModel):
     reasons: tuple[str, ...]
 
 
+class DisplayParameter(OrchestrationModel):
+    label: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+
+
 class OfferSelectionPlan(OrchestrationModel):
     selected_offer_id: str | None
     selected_offer_version: int | None = None
@@ -69,6 +74,7 @@ class OfferSelectionPlan(OrchestrationModel):
     satisfied_constraints: tuple[str, ...] = ()
     disclosed_compromises: tuple[str, ...] = ()
     rejected_offers: tuple[RejectedOffer, ...] = ()
+    display_parameters: tuple[DisplayParameter, ...] = Field(default=(), max_length=4)
 
 
 class StartPurchaseRequest(OrchestrationModel):

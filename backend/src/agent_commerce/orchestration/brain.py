@@ -29,6 +29,7 @@ from agent_commerce.orchestration.activity import (
 )
 from agent_commerce.orchestration.merchant_gateway import MerchantGateway
 from agent_commerce.orchestration.models import (
+    DisplayParameter,
     NormalizedPurchaseIntent,
     OfferSelectionPlan,
     OrchestrationModel,
@@ -86,6 +87,12 @@ class OfferComparisonOutput(OrchestrationModel):
     """Semantic match judgments for every objectively eligible candidate."""
 
     assessments: tuple[OfferMatchAssessment, ...]
+
+
+class OfferDisplayParametersOutput(OrchestrationModel):
+    """Four presentation-ready facts explaining the selected product match."""
+
+    parameters: tuple[DisplayParameter, ...] = Field(min_length=4, max_length=4)
 
 
 class IntentInterpreter(Protocol):
@@ -424,7 +431,78 @@ class OpenAIOfferPlanner:
         if not isinstance(output, OfferComparisonOutput):
             raise RuntimeError("Offer matcher returned an unexpected output type")
         _log_agent_exchange(agent.name, agent_request, output)
-        return self._build_selection(intent, eligible, rejected, output)
+        selection = self._build_selection(intent, eligible, rejected, output)
+        if selection.selected_offer_id is None:
+            return selection
+        selected_offer, selected_delivery_id, delivered_total_minor = next(
+            candidate
+            for candidate in eligible
+            if candidate[0].offer_id == selection.selected_offer_id
+        )
+        display_parameters = await self._create_display_parameters(
+            intent,
+            selected_offer,
+            selected_delivery_id,
+            delivered_total_minor,
+            reporter,
+        )
+        return selection.model_copy(update={"display_parameters": display_parameters})
+
+    async def _create_display_parameters(
+        self,
+        intent: NormalizedPurchaseIntent,
+        selected_offer: Offer,
+        selected_delivery_id: str,
+        delivered_total_minor: int,
+        reporter: ActivityReporter | None,
+    ) -> tuple[DisplayParameter, ...]:
+        agent = Agent(
+            name="Selected offer parameter presenter",
+            model=self.model,
+            model_settings=ModelSettings(
+                reasoning=Reasoning(effort=self.reasoning_effort),
+                verbosity="low",
+            ),
+            instructions=(
+                "Choose exactly four parameters that best explain why the selected offer fits "
+                "the user's purchase intent. Return concise, presentation-ready label and value "
+                "strings. Prioritize the user's hard requirements and the most decision-relevant "
+                "product facts. Ground every value in the supplied intent or authoritative offer; "
+                "do not invent facts, IDs, scores, or technical attribute names. Format money, "
+                "dates, units, and boolean facts for a human reader."
+            ),
+            output_type=OfferDisplayParametersOutput,
+        )
+        agent_request = json.dumps(
+            {
+                "intent": intent.model_dump(mode="json"),
+                "selected_offer": selected_offer.model_dump(mode="json"),
+                "selected_delivery_option": next(
+                    option.model_dump(mode="json")
+                    for option in selected_offer.delivery_options
+                    if option.delivery_option_id == selected_delivery_id
+                ),
+                "delivered_total_minor": delivered_total_minor,
+                "currency": selected_offer.unit_price.currency,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        result = await Runner.run(
+            agent,
+            agent_request,
+            max_turns=2,
+            hooks=(ActivityRunHooks(reporter, ActivityPhase.DISCOVERY) if reporter else None),
+            run_config=RunConfig(
+                workflow_name="commerce-selected-offer-parameters",
+                trace_include_sensitive_data=False,
+            ),
+        )
+        output = result.final_output
+        if not isinstance(output, OfferDisplayParametersOutput):
+            raise RuntimeError("Offer parameter presenter returned an unexpected output type")
+        _log_agent_exchange(agent.name, agent_request, output)
+        return output.parameters
 
     @staticmethod
     def _build_selection(

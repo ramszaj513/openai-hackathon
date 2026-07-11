@@ -362,6 +362,8 @@ The orchestration layer exposes one `AgentTransaction` projection for the UI and
 
 - Normalized user intent and clarification questions.
 - Selected offer, confidence, reasoning, rejected offers, and compromises.
+- Exactly four agent-selected display parameters (`label` and `value`) explaining the successful
+  match; presentation clients render these values without deriving meaning from attribute keys.
 - Current deterministic transaction state and complete transition history.
 - Checkout proposal and approval/payment/order/return references.
 - Processed merchant event IDs.

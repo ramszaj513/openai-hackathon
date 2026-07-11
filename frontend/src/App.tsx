@@ -650,12 +650,14 @@ function Thinking({ label = "Understanding your request and comparing eligible o
 }
 
 function IntentSummary({ transaction }: { transaction: AgentTransaction }) {
-  const intent = transaction.intent!;
+  const parameters = transaction.selection?.display_parameters ?? [];
   return <div className="constraint-row">
-    <span><strong>{intent.max_budget_minor ? formatMoney(intent.max_budget_minor, intent.currency) : "Any budget"}</strong><small>maximum</small></span>
-    <span><strong>{intent.required_attributes.mac_compatible ? "Mac" : "Any"}</strong><small>compatibility</small></span>
-    <span><strong>{formatDate(intent.latest_delivery_date)}</strong><small>delivery by</small></span>
-    <span><strong>{intent.minimum_return_window_days ?? 0}+ days</strong><small>returns</small></span>
+    {parameters.map((parameter, index) => (
+      <span key={`${parameter.label}-${index}`}>
+        <strong>{parameter.value}</strong>
+        <small>{parameter.label}</small>
+      </span>
+    ))}
   </div>;
 }
 

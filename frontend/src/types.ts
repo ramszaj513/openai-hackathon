@@ -127,6 +127,7 @@ export interface AgentTransaction {
     satisfied_constraints: string[];
     disclosed_compromises: string[];
     rejected_offers: Array<{ offer_id: string; reasons: string[] }>;
+    display_parameters: Array<{ label: string; value: string }>;
   } | null;
   selected_offer: Offer | null;
   proposal: CheckoutProposal | null;

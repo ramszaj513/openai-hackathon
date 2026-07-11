@@ -182,6 +182,84 @@ describe("single-chat commerce experience", () => {
     expect(screen.getByText(/won't recommend or purchase/i)).toBeInTheDocument();
   });
 
+  it("renders the four parameter labels and values supplied by the agent", async () => {
+    const selected = {
+      transaction_id: "txn-selected",
+      user_id: "user-1",
+      agent_id: "agent-1",
+      raw_request: "Buy a Mac-compatible monitor",
+      state: "OFFER_SELECTED",
+      intent: {
+        product_query: "Mac-compatible monitor",
+        category: "monitor",
+        quantity: 1,
+        max_budget_minor: 120000,
+        currency: "PLN",
+        required_attributes: { "Mac compatibility": true },
+        latest_delivery_date: "2026-07-12",
+        minimum_return_window_days: 30,
+        missing_required_fields: [],
+        clarification_questions: [],
+      },
+      selection: {
+        selected_offer_id: "offer-studio-27-usbc",
+        confidence: 1,
+        selection_reason: "Compatible with macOS.",
+        satisfied_constraints: [],
+        disclosed_compromises: [],
+        rejected_offers: [],
+        display_parameters: [
+          { label: "Compatibility", value: "Mac and macOS" },
+          { label: "Price", value: "PLN 1,149.00" },
+          { label: "Delivery", value: "Tomorrow" },
+          { label: "Returns", value: "30 days" },
+        ],
+      },
+      selected_offer: {
+        offer_id: "offer-studio-27-usbc",
+        merchant_id: "merchant-demo-electronics",
+        product: {
+          product_id: "monitor-studio-27",
+          name: "StudioView 27 USB-C",
+          category: "monitor",
+          brand: "StudioView",
+          description: "A Mac-compatible monitor.",
+          attributes: { mac_compatible: true },
+        },
+        variant: "27-inch",
+        unit_price: { amount_minor: 114900, currency: "PLN" },
+        available_quantity: 3,
+        delivery_options: [{
+          delivery_option_id: "delivery-next-day",
+          label: "Next-day delivery",
+          price_minor: 0,
+          estimated_delivery_date: "2026-07-12",
+        }],
+        return_policy: {
+          returnable: true,
+          window_days: 30,
+          restocking_fee_minor: 0,
+          description: "Free returns within 30 days.",
+        },
+        version: 1,
+        expires_at: "2026-07-12T12:00:00Z",
+      },
+      transitions: [],
+      updated_at: "2026-07-11T13:00:00Z",
+    } as unknown as AgentTransaction;
+    localStorage.setItem("arc-active-transaction", selected.transaction_id);
+    vi.mocked(api.getTransaction).mockResolvedValue(selected);
+
+    render(<App />);
+
+    expect((await screen.findByText("Compatibility")).parentElement).toHaveTextContent(
+      "Mac and macOS",
+    );
+    expect(screen.getByText("Price").parentElement).toHaveTextContent("PLN 1,149.00");
+    expect(screen.getByText("Delivery").parentElement).toHaveTextContent("Tomorrow");
+    expect(screen.getByText("Returns").parentElement).toHaveTextContent("30 days");
+  });
+
   it("collapses model and MCP telemetry into one searching-offers step", async () => {
     const transaction = {
       transaction_id: "txn-timeline",

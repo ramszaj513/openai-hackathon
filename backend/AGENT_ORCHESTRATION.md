@@ -11,6 +11,8 @@ This workstream owns the agent-first transaction lifecycle. The model interprets
 - Deterministic offline interpreter for development and CI.
 - OpenAI Agents SDK interpreter with Pydantic structured output.
 - OpenAI semantic offer matcher comparing broad merchant candidates.
+- A second structured agent pass that selects four presentation-ready parameters for the matched
+  offer; the UI renders the returned labels and values without interpreting product attributes.
 - Deterministic offer planner enforcing hard constraints and explaining rejection reasons.
 - Explicit transaction state machine from intent through refund.
 - Merchant access through a typed MCP gateway.
