@@ -1,7 +1,8 @@
-"""Deterministic merchant seed data for the canonical monitor scenario."""
+"""Deterministic multi-category merchant seed data for commerce demos."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from agent_commerce.commerce.models import (
@@ -13,6 +14,54 @@ from agent_commerce.commerce.models import (
 )
 
 MERCHANT_ID = "merchant-demo-electronics"
+
+
+@dataclass(frozen=True)
+class _SeedProduct:
+    slug: str
+    name: str
+    category: str
+    brand: str
+    description: str
+    attributes: dict[str, str | bool | int]
+    variant: str
+    price_minor: int
+    quantity: int
+    delivery_options: tuple[DeliveryOption, ...]
+    return_window_days: int = 30
+    returnable: bool = True
+    restocking_fee_minor: int = 0
+
+
+def _build_offer(spec: _SeedProduct, current: datetime) -> Offer:
+    return Offer(
+        offer_id=f"offer-{spec.slug}",
+        merchant_id=MERCHANT_ID,
+        product=Product(
+            product_id=spec.slug,
+            name=spec.name,
+            category=spec.category,
+            brand=spec.brand,
+            description=spec.description,
+            attributes=spec.attributes,
+        ),
+        variant=spec.variant,
+        unit_price=Money(amount_minor=spec.price_minor, currency="PLN"),
+        available_quantity=spec.quantity,
+        delivery_options=spec.delivery_options,
+        return_policy=ReturnPolicy(
+            returnable=spec.returnable,
+            window_days=spec.return_window_days,
+            restocking_fee_minor=spec.restocking_fee_minor,
+            description=(
+                f"Returns accepted within {spec.return_window_days} days."
+                if spec.returnable
+                else "Final-sale item; returns are not accepted."
+            ),
+        ),
+        version=1,
+        expires_at=current + timedelta(hours=24),
+    )
 
 
 def build_seed_offers(now: datetime | None = None) -> list[Offer]:
@@ -37,8 +86,14 @@ def build_seed_offers(now: datetime | None = None) -> list[Offer]:
         price_minor=0,
         estimated_delivery_date=today + timedelta(days=4),
     )
+    economy = DeliveryOption(
+        delivery_option_id="delivery-economy",
+        label="Economy delivery",
+        price_minor=0,
+        estimated_delivery_date=today + timedelta(days=7),
+    )
 
-    return [
+    canonical_offers = [
         Offer(
             offer_id="offer-studio-27-usbc",
             merchant_id=MERCHANT_ID,
@@ -152,6 +207,422 @@ def build_seed_offers(now: datetime | None = None) -> list[Offer]:
             expires_at=current + timedelta(hours=24),
         ),
     ]
+
+    expanded_catalog = (
+        _SeedProduct(
+            slug="laptop-air-13",
+            name="Northstar Air 13",
+            category="laptop",
+            brand="Northstar",
+            description="Lightweight 13-inch productivity laptop with all-day battery life.",
+            attributes={
+                "os": "Windows 11",
+                "ram_gb": 16,
+                "storage_gb": 512,
+                "screen_inches": "13.3",
+                "usb_c": True,
+                "touchscreen": False,
+                "battery_hours": 16,
+            },
+            variant="16 GB / 512 GB SSD / silver",
+            price_minor=349900,
+            quantity=9,
+            delivery_options=(tomorrow_free, standard),
+        ),
+        _SeedProduct(
+            slug="laptop-workmate-15",
+            name="WorkMate 15",
+            category="laptop",
+            brand="WorkMate",
+            description="Reliable 15-inch business notebook with a full-size keyboard.",
+            attributes={
+                "os": "Windows 11 Pro",
+                "ram_gb": 16,
+                "storage_gb": 1000,
+                "screen_inches": "15.6",
+                "usb_c": True,
+                "touchscreen": False,
+                "business": True,
+            },
+            variant="16 GB / 1 TB SSD / graphite",
+            price_minor=429900,
+            quantity=6,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="laptop-forge-pro-14",
+            name="ForgeBook Pro 14",
+            category="laptop",
+            brand="ForgeBook",
+            description="Premium compact developer laptop with 32 GB memory and Linux support.",
+            attributes={
+                "os": "Linux",
+                "ram_gb": 32,
+                "storage_gb": 1000,
+                "screen_inches": "14",
+                "usb_c": True,
+                "touchscreen": False,
+                "linux": True,
+            },
+            variant="32 GB / 1 TB SSD / black",
+            price_minor=589900,
+            quantity=4,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=14,
+        ),
+        _SeedProduct(
+            slug="laptop-gamecore-16",
+            name="GameCore 16 RTX",
+            category="laptop",
+            brand="GameCore",
+            description="High-refresh gaming laptop with dedicated graphics and RGB keyboard.",
+            attributes={
+                "os": "Windows 11",
+                "ram_gb": 32,
+                "storage_gb": 1000,
+                "screen_inches": "16",
+                "usb_c": True,
+                "dedicated_gpu": True,
+                "refresh_rate_hz": 165,
+            },
+            variant="32 GB / 1 TB SSD / RTX graphics",
+            price_minor=699900,
+            quantity=3,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=14,
+        ),
+        _SeedProduct(
+            slug="laptop-lite-14",
+            name="Everyday Lite 14",
+            category="laptop",
+            brand="Everyday",
+            description="Affordable 14-inch student laptop for browsing and office work.",
+            attributes={
+                "os": "Windows 11",
+                "ram_gb": 8,
+                "storage_gb": 256,
+                "screen_inches": "14",
+                "usb_c": True,
+                "touchscreen": False,
+                "student": True,
+            },
+            variant="8 GB / 256 GB SSD / blue",
+            price_minor=219900,
+            quantity=15,
+            delivery_options=(standard, economy),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="laptop-creator-16",
+            name="Canvas Creator 16 OLED",
+            category="laptop",
+            brand="Canvas",
+            description="Color-accurate OLED creator laptop for video editing and design.",
+            attributes={
+                "os": "Windows 11 Pro",
+                "ram_gb": 32,
+                "storage_gb": 2000,
+                "screen_inches": "16",
+                "usb_c": True,
+                "oled": True,
+                "dedicated_gpu": True,
+            },
+            variant="32 GB / 2 TB SSD / studio grey",
+            price_minor=829900,
+            quantity=2,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="phone-pocket-128",
+            name="Pocket One 5G",
+            category="phone",
+            brand="Pocket",
+            description="Balanced 5G smartphone with a bright OLED display and dual camera.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 128,
+                "screen_inches": "6.1",
+                "5g": True,
+                "oled": True,
+                "wireless_charging": False,
+                "esim": True,
+            },
+            variant="128 GB / midnight",
+            price_minor=179900,
+            quantity=18,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="phone-pocket-pro-256",
+            name="Pocket One Pro",
+            category="phone",
+            brand="Pocket",
+            description="Premium 5G camera smartphone with wireless charging and telephoto lens.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 256,
+                "screen_inches": "6.3",
+                "5g": True,
+                "oled": True,
+                "wireless_charging": True,
+                "camera_mp": 50,
+                "esim": True,
+            },
+            variant="256 GB / titanium grey",
+            price_minor=329900,
+            quantity=7,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="phone-compact-128",
+            name="MiniCall Compact",
+            category="phone",
+            brand="MiniCall",
+            description="Compact 5G smartphone designed for comfortable one-handed use.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 128,
+                "screen_inches": "5.8",
+                "5g": True,
+                "oled": True,
+                "wireless_charging": True,
+                "compact": True,
+            },
+            variant="128 GB / sage",
+            price_minor=239900,
+            quantity=8,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=14,
+        ),
+        _SeedProduct(
+            slug="phone-endurance-256",
+            name="Endurance Max 5G",
+            category="phone",
+            brand="Endurance",
+            description="Large-battery rugged smartphone with water resistance and 5G.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 256,
+                "screen_inches": "6.7",
+                "5g": True,
+                "battery_mah": 6000,
+                "water_resistant": True,
+                "rugged": True,
+            },
+            variant="256 GB / rugged black",
+            price_minor=259900,
+            quantity=10,
+            delivery_options=(standard, economy),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="phone-value-64",
+            name="Everyday Phone SE",
+            category="phone",
+            brand="Everyday",
+            description="Affordable smartphone with dependable battery life and dual SIM.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 64,
+                "screen_inches": "6.5",
+                "5g": False,
+                "battery_mah": 5000,
+                "dual_sim": True,
+                "wireless_charging": False,
+            },
+            variant="64 GB / charcoal",
+            price_minor=79900,
+            quantity=25,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="phone-fold-512",
+            name="Flex Fold 5G",
+            category="phone",
+            brand="Flex",
+            description="Foldable flagship smartphone with a large flexible OLED display.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 512,
+                "screen_inches": "7.6",
+                "5g": True,
+                "oled": True,
+                "wireless_charging": True,
+                "foldable": True,
+            },
+            variant="512 GB / obsidian",
+            price_minor=649900,
+            quantity=2,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=14,
+        ),
+        _SeedProduct(
+            slug="tablet-sketch-11",
+            name="SketchTab 11",
+            category="tablet",
+            brand="SketchTab",
+            description="11-inch tablet with stylus support for notes, drawing, and media.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 128,
+                "screen_inches": "11",
+                "stylus_support": True,
+                "cellular": False,
+                "usb_c": True,
+            },
+            variant="128 GB Wi-Fi / silver",
+            price_minor=189900,
+            quantity=11,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="tablet-work-13",
+            name="WorkSlate 13 Pro",
+            category="tablet",
+            brand="WorkSlate",
+            description="Large productivity tablet with keyboard support and cellular 5G.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 256,
+                "screen_inches": "13",
+                "stylus_support": True,
+                "keyboard_support": True,
+                "cellular": True,
+                "5g": True,
+            },
+            variant="256 GB 5G / graphite",
+            price_minor=379900,
+            quantity=5,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="tablet-kids-10",
+            name="FamilyTab Kids 10",
+            category="tablet",
+            brand="FamilyTab",
+            description="Durable kids tablet with parental controls and protective case.",
+            attributes={
+                "os": "Android",
+                "storage_gb": 64,
+                "screen_inches": "10",
+                "parental_controls": True,
+                "protective_case": True,
+                "cellular": False,
+            },
+            variant="64 GB Wi-Fi / ocean blue",
+            price_minor=89900,
+            quantity=16,
+            delivery_options=(standard, economy),
+            return_window_days=60,
+        ),
+        _SeedProduct(
+            slug="headphones-quiet-pro",
+            name="QuietWave Pro ANC",
+            category="headphones",
+            brand="QuietWave",
+            description="Wireless over-ear headphones with adaptive active noise cancelling.",
+            attributes={
+                "wireless": True,
+                "noise_cancelling": True,
+                "over_ear": True,
+                "battery_hours": 40,
+                "multipoint": True,
+            },
+            variant="midnight black",
+            price_minor=129900,
+            quantity=14,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="earbuds-sport",
+            name="PulseBuds Sport",
+            category="headphones",
+            brand="PulseBuds",
+            description="Water-resistant wireless sport earbuds with secure ear hooks.",
+            attributes={
+                "wireless": True,
+                "noise_cancelling": False,
+                "earbuds": True,
+                "battery_hours": 12,
+                "water_resistant": True,
+            },
+            variant="lime / charging case",
+            price_minor=49900,
+            quantity=20,
+            delivery_options=(tomorrow_paid, standard),
+            return_window_days=14,
+        ),
+        _SeedProduct(
+            slug="keyboard-mechanical-75",
+            name="KeyForge 75 Wireless",
+            category="keyboard",
+            brand="KeyForge",
+            description="Compact wireless mechanical keyboard with hot-swappable switches.",
+            attributes={
+                "wireless": True,
+                "mechanical": True,
+                "layout": "75 percent",
+                "hot_swappable": True,
+                "mac_compatible": True,
+                "backlit": True,
+            },
+            variant="tactile switches / graphite",
+            price_minor=64900,
+            quantity=13,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="smartwatch-active-44",
+            name="ActiveLoop Watch 44",
+            category="smartwatch",
+            brand="ActiveLoop",
+            description="GPS fitness smartwatch with heart-rate tracking and offline music.",
+            attributes={
+                "gps": True,
+                "heart_rate": True,
+                "sleep_tracking": True,
+                "water_resistant": True,
+                "battery_days": 7,
+                "cellular": False,
+            },
+            variant="44 mm / forest green",
+            price_minor=109900,
+            quantity=9,
+            delivery_options=(standard,),
+            return_window_days=30,
+        ),
+        _SeedProduct(
+            slug="dock-connect-12",
+            name="ConnectHub 12-in-1 USB-C Dock",
+            category="dock",
+            brand="ConnectHub",
+            description="USB-C laptop docking station with dual display, Ethernet, and charging.",
+            attributes={
+                "usb_c": True,
+                "ports": 12,
+                "dual_display": True,
+                "ethernet": True,
+                "power_delivery_watts": 100,
+                "mac_compatible": True,
+            },
+            variant="12-port / space grey",
+            price_minor=74900,
+            quantity=17,
+            delivery_options=(tomorrow_free, standard),
+            return_window_days=30,
+        ),
+    )
+
+    return [*canonical_offers, *(_build_offer(spec, current) for spec in expanded_catalog)]
 
 
 def canonical_latest_delivery_date(today: date | None = None) -> date:

@@ -357,6 +357,14 @@ The orchestration layer exposes one `AgentTransaction` projection for the UI and
 
 The projection is not authoritative for merchant checkout/order or provider payment state; it references those authoritative resources.
 
+### Transaction activity projection
+
+The orchestration API also exposes an append-only activity projection for live user interfaces.
+Every item has a transaction-scoped sequence, stable event ID, phase, status, safe title/message,
+actor, authority, timestamp, and non-sensitive structured data. Consumers resume with
+`after_sequence` or SSE `Last-Event-ID` and must render the transaction snapshot before applying
+new activity. Activity is explanatory; deterministic transaction state remains authoritative.
+
 ## 8. Contract acceptance scenarios
 
 Before a cross-team interface is considered stable, verify:

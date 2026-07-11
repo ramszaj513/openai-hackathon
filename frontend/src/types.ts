@@ -2,6 +2,7 @@ export type TransactionState =
   | "INTENT_CAPTURED"
   | "CLARIFICATION_REQUIRED"
   | "DISCOVERING"
+  | "NO_MATCH"
   | "OFFER_SELECTED"
   | "CHECKOUT_DRAFT"
   | "APPROVAL_PENDING"
@@ -143,6 +144,49 @@ export interface AgentTransaction {
   }>;
   created_at: string;
   updated_at: string;
+}
+
+export interface TransactionAccepted {
+  transaction: AgentTransaction;
+  status_url: string;
+  activity_url: string;
+  stream_url: string;
+  recommended_poll_interval_ms: number;
+}
+
+export type ActivityPhase =
+  | "INTENT"
+  | "DISCOVERY"
+  | "CHECKOUT"
+  | "APPROVAL"
+  | "PAYMENT"
+  | "ORDER"
+  | "FULFILLMENT"
+  | "RESOLUTION"
+  | "SYSTEM";
+
+export type ActivityStatus =
+  | "STARTED"
+  | "COMPLETED"
+  | "WAITING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "INFO";
+
+export interface TransactionActivity {
+  event_id: string;
+  sequence: number;
+  transaction_id: string;
+  kind: string;
+  phase: ActivityPhase;
+  status: ActivityStatus;
+  title: string;
+  message: string;
+  actor_type: string;
+  actor_id: string;
+  authority: string;
+  occurred_at: string;
+  data: Record<string, unknown>;
 }
 
 export interface Order {

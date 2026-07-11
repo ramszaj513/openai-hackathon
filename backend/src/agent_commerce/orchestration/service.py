@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TypeVar
 from uuid import uuid4
@@ -19,6 +20,13 @@ from agent_commerce.commerce.models import (
     CreateReturnRequest,
     OfferSelection,
     OrderState,
+)
+from agent_commerce.orchestration.activity import (
+    ActivityPhase,
+    ActivityReporter,
+    ActivityStatus,
+    TransactionActivity,
+    TransactionActivityLog,
 )
 from agent_commerce.orchestration.brain import IntentInterpreter, OfferPlanner
 from agent_commerce.orchestration.merchant_gateway import (
@@ -59,6 +67,39 @@ from agent_commerce.trust.models import (
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
+@dataclass(frozen=True)
+class TransactionSubmission:
+    transaction: AgentTransaction
+    fingerprint: str
+    should_process: bool
+
+
+STATE_PHASES: dict[TransactionState, ActivityPhase] = {
+    TransactionState.INTENT_CAPTURED: ActivityPhase.INTENT,
+    TransactionState.CLARIFICATION_REQUIRED: ActivityPhase.INTENT,
+    TransactionState.DISCOVERING: ActivityPhase.DISCOVERY,
+    TransactionState.NO_MATCH: ActivityPhase.DISCOVERY,
+    TransactionState.OFFER_SELECTED: ActivityPhase.DISCOVERY,
+    TransactionState.CHECKOUT_DRAFT: ActivityPhase.CHECKOUT,
+    TransactionState.APPROVAL_PENDING: ActivityPhase.APPROVAL,
+    TransactionState.APPROVED: ActivityPhase.APPROVAL,
+    TransactionState.PAYMENT_AUTHORIZING: ActivityPhase.PAYMENT,
+    TransactionState.PAYMENT_AUTHORIZED: ActivityPhase.PAYMENT,
+    TransactionState.ORDER_COMMITTING: ActivityPhase.ORDER,
+    TransactionState.RECOVERY_REQUIRED: ActivityPhase.ORDER,
+    TransactionState.ORDER_CONFIRMED: ActivityPhase.ORDER,
+    TransactionState.PAYMENT_CAPTURED: ActivityPhase.PAYMENT,
+    TransactionState.FULFILLING: ActivityPhase.FULFILLMENT,
+    TransactionState.DELIVERED: ActivityPhase.FULFILLMENT,
+    TransactionState.CANCELLATION_REQUESTED: ActivityPhase.RESOLUTION,
+    TransactionState.CANCELLED: ActivityPhase.RESOLUTION,
+    TransactionState.RETURN_REQUESTED: ActivityPhase.RESOLUTION,
+    TransactionState.REFUND_PENDING: ActivityPhase.RESOLUTION,
+    TransactionState.REFUNDED: ActivityPhase.RESOLUTION,
+    TransactionState.FAILED: ActivityPhase.SYSTEM,
+}
+
+
 class CommerceOrchestrator:
     def __init__(
         self,
@@ -73,6 +114,7 @@ class CommerceOrchestrator:
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
         autonomous_confidence_threshold: float = 0.9,
+        activities: TransactionActivityLog | None = None,
     ) -> None:
         self.merchant = merchant
         self.trust = trust
@@ -82,16 +124,32 @@ class CommerceOrchestrator:
         self.repository = repository or InMemoryTransactionRepository()
         self.audit = audit or trust.audit
         self._clock = clock or (lambda: datetime.now(UTC))
+        self.activities = activities or TransactionActivityLog(clock=self._clock)
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.autonomous_confidence_threshold = autonomous_confidence_threshold
 
     async def start(self, request: StartPurchaseRequest) -> AgentTransaction:
+        submission = self.begin(request)
+        if not submission.should_process:
+            return submission.transaction
+        return await self.process(
+            request,
+            submission.transaction.transaction_id,
+            submission.fingerprint,
+        )
+
+    def begin(self, request: StartPurchaseRequest) -> TransactionSubmission:
+        """Persist and return a transaction before model processing begins."""
         fingerprint = self._fingerprint(request)
         cached = self.repository.get_idempotent(
             "start_purchase", request.idempotency_key, fingerprint
         )
         if cached is not None:
-            return self._expect_type(cached, AgentTransaction)
+            return TransactionSubmission(
+                transaction=self._expect_type(cached, AgentTransaction),
+                fingerprint=fingerprint,
+                should_process=False,
+            )
         now = self._now()
         transaction = AgentTransaction(
             transaction_id=f"txn_{self._id_factory()}",
@@ -113,8 +171,58 @@ class CommerceOrchestrator:
             updated_at=now,
         )
         self.repository.save(transaction)
+        self.repository.save_idempotent(
+            "start_purchase", request.idempotency_key, fingerprint, transaction
+        )
+        self.activities.record(
+            transaction_id=transaction.transaction_id,
+            kind="transaction.created",
+            phase=ActivityPhase.INTENT,
+            status=ActivityStatus.STARTED,
+            title="Purchase request captured",
+            message="The agent transaction was created and queued for processing.",
+            actor_type="user",
+            actor_id=transaction.user_id,
+            authority="orchestrator",
+        )
+        return TransactionSubmission(
+            transaction=transaction,
+            fingerprint=fingerprint,
+            should_process=True,
+        )
+
+    async def process(
+        self,
+        request: StartPurchaseRequest,
+        transaction_id: str,
+        fingerprint: str,
+    ) -> AgentTransaction:
+        """Run model, merchant, policy, and optional autonomous execution work."""
+        transaction = self.get(transaction_id)
+        reporter = ActivityReporter(self.activities, transaction_id, transaction.agent_id)
         try:
-            intent = await self.intent_interpreter.normalize(request.raw_request)
+            reporter.record(
+                kind="agent.intent.started",
+                phase=ActivityPhase.INTENT,
+                status=ActivityStatus.STARTED,
+                title="Understanding purchase intent",
+                message="The model is converting the request into structured constraints.",
+            )
+            intent = await self.intent_interpreter.normalize(request.raw_request, reporter)
+            reporter.record(
+                kind="agent.intent.completed",
+                phase=ActivityPhase.INTENT,
+                status=ActivityStatus.COMPLETED,
+                title="Purchase intent structured",
+                message="The request is now represented as typed transaction constraints.",
+                data={
+                    "product_query": intent.product_query,
+                    "category": intent.category,
+                    "quantity": intent.quantity,
+                    "currency": intent.currency,
+                    "missing_required_fields": list(intent.missing_required_fields),
+                },
+            )
             transaction = transaction.model_copy(
                 update={"intent": intent, "updated_at": self._now()}
             )
@@ -132,7 +240,27 @@ class CommerceOrchestrator:
                 TransactionState.DISCOVERING,
                 "Agent is discovering and evaluating merchant offers.",
             )
-            selection = await self.offer_planner.select(intent)
+            selection = await self.offer_planner.select(intent, reporter)
+            reporter.record(
+                kind="agent.selection.completed",
+                phase=ActivityPhase.DISCOVERY,
+                status=(
+                    ActivityStatus.SUCCEEDED
+                    if selection.selected_offer_id is not None
+                    else ActivityStatus.COMPLETED
+                ),
+                title=(
+                    "Offer selected"
+                    if selection.selected_offer_id is not None
+                    else "No suitable offer found"
+                ),
+                message=selection.selection_reason,
+                data={
+                    "selected_offer_id": selection.selected_offer_id,
+                    "confidence": selection.confidence,
+                    "rejected_offer_count": len(selection.rejected_offers),
+                },
+            )
             if selection.selected_offer_id is None:
                 transaction = self._transition(
                     transaction,
@@ -409,6 +537,15 @@ class CommerceOrchestrator:
             raise not_found("agent_transaction", transaction_id)
         return transaction
 
+    def list_activities(
+        self,
+        transaction_id: str,
+        *,
+        after_sequence: int = 0,
+    ) -> list[TransactionActivity]:
+        self.get(transaction_id)
+        return self.activities.list(transaction_id, after_sequence=after_sequence)
+
     async def _execute_approved(self, transaction: AgentTransaction) -> AgentTransaction:
         if transaction.approval_id is None or transaction.checkout is None:
             raise RuntimeError("Approved transaction is missing approval or checkout")
@@ -593,6 +730,28 @@ class CommerceOrchestrator:
                 "from_state": transaction.state,
                 "to_state": state,
                 "reason": reason,
+            },
+        )
+        status = ActivityStatus.COMPLETED
+        if state is TransactionState.APPROVAL_PENDING:
+            status = ActivityStatus.WAITING
+        elif state in {TransactionState.NO_MATCH, TransactionState.REFUNDED}:
+            status = ActivityStatus.SUCCEEDED
+        elif state is TransactionState.FAILED:
+            status = ActivityStatus.FAILED
+        self.activities.record(
+            transaction_id=updated.transaction_id,
+            kind="transaction.transition",
+            phase=STATE_PHASES[state],
+            status=status,
+            title=state.value.replace("_", " ").title(),
+            message=reason,
+            actor_type="agent",
+            actor_id=updated.agent_id,
+            authority="orchestrator",
+            data={
+                "from_state": transaction.state,
+                "to_state": state,
             },
         )
         return updated

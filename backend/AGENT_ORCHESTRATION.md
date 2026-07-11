@@ -10,7 +10,7 @@ This workstream owns the agent-first transaction lifecycle. The model interprets
 - Clarification state with explicit missing fields and questions.
 - Deterministic offline interpreter for development and CI.
 - OpenAI Agents SDK interpreter with Pydantic structured output.
-- Read-only OpenAI offer planner connected to merchant MCP tools.
+- OpenAI semantic offer matcher comparing broad merchant candidates.
 - Deterministic offer planner enforcing hard constraints and explaining rejection reasons.
 - Explicit transaction state machine from intent through refund.
 - Merchant access through a typed MCP gateway.
@@ -29,8 +29,7 @@ This workstream owns the agent-first transaction lifecycle. The model interprets
 ### Model-controlled
 
 - Interpret the user's desired outcome into a structured purchase intent.
-- Discover merchant offers through read-only MCP tools.
-- Compare eligible offers and explain the decision and compromises.
+- Compare objectively eligible merchant offers by product meaning and explain the decision.
 - Produce confidence and clarification questions.
 
 ### Deterministic services
@@ -43,16 +42,12 @@ This workstream owns the agent-first transaction lifecycle. The model interprets
 - Create and reconcile merchant orders.
 - Enforce transaction state transitions and idempotency.
 
-The offer-planning agent can access only:
+The typed merchant gateway retrieves broad candidates through MCP before model comparison. Deterministic code rejects candidates for stock, budget, delivery, and return-policy violations. The model receives the remaining authoritative offer records and returns exactly one structured `matches` judgment for each `offer_id`; it does not invent catalog filters or perform checkout mutations.
 
 ```text
-search_offers
-get_offer
-get_delivery_options
-get_return_policy
+merchant MCP search -> objective filtering -> semantic agent comparison
 ```
-
-It cannot call checkout completion or payment tools.
+The agent cannot call checkout completion or payment tools.
 
 ## Runtime modes
 
@@ -67,7 +62,7 @@ OPENAI_REASONING_EFFORT=high
 MCP_BASE_URL=http://127.0.0.1:8000/mcp
 ```
 
-This uses the OpenAI Agents SDK for structured intent and read-only MCP offer planning. Sensitive trace payloads remain disabled by the project environment settings.
+This uses the OpenAI Agents SDK for structured intent and semantic candidate comparison over offers retrieved through MCP. Sensitive trace payloads remain disabled by the project environment settings.
 
 ### Model-disabled infrastructure mode
 
@@ -129,15 +124,26 @@ Both paths are covered by automated tests.
 ## REST handoff for Bartosz
 
 ```text
-POST /api/agent/transactions
+POST /api/agent/transactions                                  -> 202 receipt
 GET  /api/agent/transactions/{transaction_id}
+GET  /api/agent/transactions/{transaction_id}/activity?after_sequence=N
+GET  /api/agent/transactions/{transaction_id}/stream          -> SSE
 POST /api/agent/transactions/{transaction_id}/approve
 POST /api/agent/transactions/{transaction_id}/resume
 POST /api/agent/transactions/{transaction_id}/cancel
 POST /api/agent/transactions/{transaction_id}/return
 ```
 
-`AgentTransaction` contains intent, selection explanation, checkout proposal, references, current state, errors, and the complete transition timeline.
+The create response immediately contains the `INTENT_CAPTURED` transaction plus status, activity,
+and stream URLs. Model and MCP processing continues as a background task. `AgentTransaction`
+contains intent, selection explanation, checkout proposal, references, current state, errors, and
+the complete deterministic transition timeline.
+
+The activity endpoint is an append-only, safe UI projection with monotonically increasing sequence
+numbers. It includes transaction transitions, model-call boundaries, MCP tool-call boundaries, and
+structured selection summaries. It deliberately excludes prompts, raw model output, chain-of-thought,
+payment credentials, and sensitive tool payloads. SSE emits `transaction.activity` events and accepts
+the standard `Last-Event-ID` header for reconnection; polling with `after_sequence` is the fallback.
 
 ## Verification
 

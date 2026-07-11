@@ -132,3 +132,13 @@ class AgentTransaction(OrchestrationModel):
     transitions: tuple[TransitionRecord, ...]
     created_at: datetime
     updated_at: datetime
+
+
+class TransactionAccepted(OrchestrationModel):
+    """Immediate receipt returned before background agent processing begins."""
+
+    transaction: AgentTransaction
+    status_url: str
+    activity_url: str
+    stream_url: str
+    recommended_poll_interval_ms: int = Field(default=500, ge=100)

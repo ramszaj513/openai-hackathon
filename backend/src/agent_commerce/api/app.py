@@ -22,9 +22,9 @@ from agent_commerce.mcp_server import create_commerce_mcp
 from agent_commerce.orchestration.factory import create_default_orchestrator
 from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments import PaymentService
-from agent_commerce.trust import TrustService
 from agent_commerce.transcription import RealtimeTranscriptionService
 from agent_commerce.transcription.service import TranscriptionDelay
+from agent_commerce.trust import TrustService
 
 
 def create_app(

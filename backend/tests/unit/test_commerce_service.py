@@ -124,7 +124,7 @@ def test_catalog_search_is_product_agnostic(service: CommerceService, now: datet
 
     matches = service.search_offers(
         SearchOffersRequest(
-            query="wireless noise cancelling headphones",
+            query="QuietSound wireless noise cancelling headphones",
             category="HEADPHONES",
         )
     )

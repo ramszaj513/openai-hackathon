@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from fastapi import FastAPI
-
 from agent_commerce.api.transcription_routes import create_transcription_router
 from agent_commerce.transcription import (
     RealtimeTranscriptionService,
     TranscriptionServiceError,
 )
+from fastapi import FastAPI
 
 
 async def test_creates_transcription_only_realtime_call() -> None:
