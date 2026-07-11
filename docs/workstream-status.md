@@ -10,7 +10,7 @@ Last team sync: _not yet recorded_
 |---|---|---|---|---|---|
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | Canonical intent-to-order tool sequence with OpenAI Agents SDK | Search and checkout MCP contract | Not started |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
-| Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound approval and Python payment simulator | Approval and payment references for completion | Not started |
+| Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
 | Experience and integration | Bartosz | `codex/experience` | Streamlit intent, approval, and transaction timeline UI | Walking-skeleton end-to-end flow | Not started |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
@@ -22,6 +22,7 @@ Record proposed or merged changes that affect another workstream.
 | Date/time | Proposed by | Contract or operation | Change | Affected owners | Decision/status |
 |---|---|---|---|---|---|
 | 2026-07-11 | Kuba | Commerce REST/MCP contract | Implemented structured offers, versioned checkout, completion authority inputs, order/cancel/return, events, and stable errors | Maciej, Piotr, Bartosz | Ready for review on `codex/commerce-mcp` |
+| 2026-07-11 | Piotr workstream | Trust/payment contract | Implemented mandates, proposal hashes, approvals, scoped credentials, authorize/capture/void/refund/recovery, and audit | Maciej, Kuba, Bartosz | Ready for review on `codex/payments-trust` |
 
 ## Canonical scenario health
 
@@ -34,12 +35,12 @@ The integration owner updates the first failing step. Do not mark later steps he
 | Search structured offers | Passing | Unit, MCP contract, and REST integration tests |
 | Reject invalid offers and select one | Not run | — |
 | Create authoritative checkout | Passing | Inventory reservation, version, expiry, totals, and idempotency tests |
-| Present checkout proposal | Not run | — |
-| Approve exact checkout version | Not run | — |
-| Authorize scoped payment | Not run | — |
+| Present checkout proposal | Passing | Exact immutable proposal with hash, terms, and policy context |
+| Approve exact checkout version | Passing | Explicit and mandate approval; automatic invalidation on checkout change |
+| Authorize scoped payment | Passing | Single-use credential and exact merchant/checkout/amount/currency binding |
 | Complete checkout idempotently | Passing | Exact approval/payment binding and duplicate completion tests |
-| Confirm order and capture payment | Not run | — |
-| Display receipt and timeline | Not run | — |
+| Confirm order and capture payment | Passing | Integrated API test covers merchant completion followed by capture |
+| Display receipt and timeline | Failing | Receipt/audit APIs pass; Bartosz's Streamlit rendering is not integrated yet |
 | React to post-purchase event | Passing | Fulfillment transition and persisted merchant event tests |
 | Cancel/return and track refund | Failing | Commerce emits `refund.pending`; Piotr's refund processing is not integrated yet |
 
@@ -62,3 +63,4 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | Date/time | From | To | Outcome | Changed interfaces | Verification/link |
 |---|---|---|---|---|---|
 | 2026-07-11 | Kuba | Maciej, Piotr, Bartosz | Commerce service, REST API, and FastMCP surface ready for integration | Models and operations in `docs/shared-contracts.md`; implementation contracts in `backend/src` | `backend/README.md`; commerce test suite |
+| 2026-07-11 | Piotr workstream | Maciej, Kuba, Bartosz | Trust, payment, audit, and recovery services ready for integration | Adds product category to checkout lines; trust/payment REST surfaces and automatic checkout invalidation | `backend/PAYMENTS_TRUST.md`; trust/payment tests |

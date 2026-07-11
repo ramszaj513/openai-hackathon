@@ -2,6 +2,8 @@
 
 Owner: **Kuba**
 
+This README covers the commerce/MCP slice. The integrated trust and payment slice is documented in [PAYMENTS_TRUST.md](PAYMENTS_TRUST.md).
+
 This folder contains the merchant-authoritative commerce implementation and its REST/MCP transports. It intentionally does not implement agent reasoning, user approval issuance, payment authorization/capture, or Streamlit UI.
 
 ## Implemented capabilities
@@ -40,4 +42,3 @@ The MCP endpoint is `http://127.0.0.1:8000/mcp`; REST endpoints are under `/api`
 - `tests/unit`: commerce rules, idempotency, expiry, approval binding, cancellation, returns.
 - `tests/contract`: FastMCP tool names and structured tool results.
 - `tests/integration`: REST behavior and real Streamable HTTP MCP initialization.
-

@@ -110,6 +110,7 @@ class CheckoutLine(ContractModel):
     offer_version: int = Field(ge=1)
     product_id: str
     product_name: str
+    product_category: str
     variant: str
     quantity: PositiveQuantity
     unit_price: Money
