@@ -15,11 +15,11 @@ from agent_commerce.commerce.models import (
     CompleteCheckoutRequest,
     CreateCheckoutRequest,
     CreateReturnRequest,
-    SearchOffersRequest,
     ToolResult,
     UpdateCheckoutRequest,
 )
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.mcp_server.models import SearchOffersToolRequest
 
 ResultT = TypeVar("ResultT", bound=BaseModel)
 
@@ -54,9 +54,9 @@ def create_commerce_mcp(service: CommerceService) -> FastMCP:
     )
 
     @server.tool(name="search_offers")
-    def search_offers(request: SearchOffersRequest) -> ToolResult:
+    def search_offers(request: SearchOffersToolRequest) -> ToolResult:
         """Find current structured offers matching hard purchase constraints."""
-        return _execute(lambda: service.search_offers(request))
+        return _execute(lambda: service.search_offers(request.to_domain()))
 
     @server.tool(name="get_offer")
     def get_offer(offer_id: str) -> ToolResult:

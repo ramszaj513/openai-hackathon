@@ -25,3 +25,16 @@ def test_health_handles_unavailable_backend() -> None:
     api = CommerceAPIClient("http://test", transport=httpx.MockTransport(handler))
     assert api.health() is False
     api.close()
+
+
+def test_client_distinguishes_slow_agent_from_unavailable_backend() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("agent still running", request=request)
+
+    api = CommerceAPIClient("http://test", transport=httpx.MockTransport(handler))
+    with pytest.raises(BackendAPIError) as exc_info:
+        api.start_transaction({"raw_request": "find a monitor"})
+    api.close()
+
+    assert exc_info.value.code == "BACKEND_TIMEOUT"
+    assert "did not finish" in exc_info.value.message

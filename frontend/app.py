@@ -93,12 +93,13 @@ st.markdown(
 )
 
 BACKEND_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000")
+BACKEND_REQUEST_TIMEOUT = float(os.getenv("BACKEND_REQUEST_TIMEOUT_SECONDS", "300"))
 USER_ID = os.getenv("DEMO_USER_ID", "user-bartosz")
 AGENT_ID = os.getenv("DEMO_AGENT_ID", "commerce-agent")
 
 
 def client() -> CommerceAPIClient:
-    return CommerceAPIClient(BACKEND_URL)
+    return CommerceAPIClient(BACKEND_URL, timeout=BACKEND_REQUEST_TIMEOUT)
 
 
 def initialize_state() -> None:
@@ -218,7 +219,8 @@ def render_intent() -> None:
         finally:
             api.close()
 
-    transaction = run_action(action)
+    with st.spinner("The agent is interpreting the request and comparing merchant offers…"):
+        transaction = run_action(action)
     if not transaction:
         return
     st.session_state.intent = intent

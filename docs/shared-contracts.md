@@ -255,6 +255,8 @@ Payment and user approval should not be casually embedded in merchant discovery 
 - May return zero or more offers and an explanation of filters applied.
 - Does not claim final tax, shipping, or inventory reservation.
 - Results include offer version and expiry.
+- At the MCP boundary, dynamic attribute filters use a portable list of `{name, value}` objects;
+  the merchant adapter converts that list into its native search representation.
 
 ### `create_checkout`
 

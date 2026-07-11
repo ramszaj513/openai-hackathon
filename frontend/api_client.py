@@ -25,13 +25,14 @@ class CommerceAPIClient:
         self,
         base_url: str,
         *,
-        timeout: float = 8.0,
+        timeout: float = 300.0,
+        connect_timeout: float = 3.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(
             base_url=self.base_url,
-            timeout=timeout,
+            timeout=httpx.Timeout(timeout, connect=connect_timeout),
             transport=transport,
         )
 
@@ -40,7 +41,7 @@ class CommerceAPIClient:
 
     def health(self) -> bool:
         try:
-            response = self._client.get("/health")
+            response = self._client.get("/health", timeout=3.0)
             return response.status_code == 200 and response.json().get("status") == "ok"
         except (httpx.HTTPError, ValueError):
             return False
@@ -149,6 +150,11 @@ class CommerceAPIClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             response = self._client.request(method, path, **kwargs)
+        except httpx.TimeoutException as exc:
+            raise BackendAPIError(
+                "BACKEND_TIMEOUT",
+                "The commerce agent did not finish before the frontend timeout",
+            ) from exc
         except httpx.HTTPError as exc:
             raise BackendAPIError(
                 "BACKEND_UNAVAILABLE", "Cannot reach the commerce backend"

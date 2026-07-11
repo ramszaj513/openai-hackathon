@@ -13,6 +13,8 @@ uv run streamlit run frontend/app.py
 ```
 
 Set `BACKEND_BASE_URL` if the backend is not available at `http://127.0.0.1:8000`.
+Set `BACKEND_REQUEST_TIMEOUT_SECONDS` to control how long Streamlit waits for agent operations;
+the default is 300 seconds because high-reasoning model runs can make several MCP calls.
 
 ## Integration boundary
 

@@ -202,7 +202,14 @@ class DeterministicOfferPlanner:
 class OpenAIIntentInterpreter:
     """Structured intent extraction using the OpenAI Agents SDK."""
 
-    def __init__(self, model: str, reasoning_effort: ReasoningEffort) -> None:
+    def __init__(
+        self,
+        model: str,
+        reasoning_effort: ReasoningEffort,
+        *,
+        today: date | None = None,
+    ) -> None:
+        self.today = today or date.today()
         self.agent = Agent(
             name="Purchase intent interpreter",
             model=model,
@@ -214,7 +221,8 @@ class OpenAIIntentInterpreter:
                 "Convert the user's purchase request into the supplied structured schema. "
                 "Amounts use integer minor units. Treat category and maximum budget/currency "
                 "as required before an autonomous purchase. Do not invent missing values; "
-                "list missing fields and concise clarification questions."
+                "list missing fields and concise clarification questions. Resolve relative "
+                "dates only against the current date supplied with the request."
             ),
             output_type=PurchaseIntentOutput,
         )
@@ -222,7 +230,7 @@ class OpenAIIntentInterpreter:
     async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
         result = await Runner.run(
             self.agent,
-            raw_request,
+            f"Current date: {self.today.isoformat()}\nPurchase request: {raw_request}",
             max_turns=2,
             run_config=RunConfig(
                 workflow_name="commerce-intent-normalization",

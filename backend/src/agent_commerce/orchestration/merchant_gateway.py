@@ -24,6 +24,7 @@ from agent_commerce.commerce.models import (
     SearchOffersRequest,
 )
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.mcp_server.models import SearchOffersToolRequest
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -99,7 +100,10 @@ class MCPMerchantGateway:
         self.timeout_seconds = timeout_seconds
 
     async def search_offers(self, request: SearchOffersRequest) -> list[Offer]:
-        payload = await self._call("search_offers", {"request": request.model_dump(mode="json")})
+        tool_request = SearchOffersToolRequest.from_domain(request)
+        payload = await self._call(
+            "search_offers", {"request": tool_request.model_dump(mode="json")}
+        )
         return TypeAdapter(list[Offer]).validate_python(payload)
 
     async def get_offer(self, offer_id: str) -> Offer:
