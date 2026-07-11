@@ -178,8 +178,15 @@ Required semantics:
 - Expiry.
 - Provider reference safe for application use.
 - Originating approval and single-use credential references.
+- Safe provider error and decline codes when authorization fails; never raw provider messages.
 
 The internal payment lifecycle distinguishes credential issuance, authorization, capture, void, partial/full refund, and reconciliation. The merchant only receives the scoped `PaymentAuthorizationReference`; provider credentials remain inside the payment service.
+
+For interactive Stripe test-mode entry, Stripe Elements owns the card fields and returns an opaque
+PaymentMethod identifier to the browser. The explicit approval request may carry that validated
+`pm_...` identifier directly to the payment service for one authorization attempt. It must not be
+stored in the transaction projection, audit events, model context, or browser conversation history.
+Raw card fields never enter an application request.
 
 ### PaymentReceipt
 

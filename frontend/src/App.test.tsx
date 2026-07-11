@@ -9,6 +9,11 @@ vi.mock("./lib/api", () => ({
   APIError: class APIError extends Error {},
   api: {
     health: vi.fn().mockResolvedValue(true),
+    paymentConfig: vi.fn().mockResolvedValue({
+      provider: "simulator",
+      requires_payment_method: false,
+      stripe_publishable_key: null,
+    }),
     getTransaction: vi.fn(),
     getOrder: vi.fn(),
     getPayment: vi.fn(),

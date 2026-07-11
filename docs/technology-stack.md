@@ -197,6 +197,7 @@ BACKEND_BASE_URL=http://localhost:8000
 MCP_BASE_URL=http://localhost:8000/mcp
 PAYMENT_PROVIDER=simulator
 STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
 STRIPE_PAYMENT_METHOD=pm_card_visa
 STRIPE_DECLINE_PAYMENT_METHOD=pm_card_visa_chargeDeclined
 STRIPE_API_BASE=https://api.stripe.com/v1

@@ -21,6 +21,7 @@ from agent_commerce.payments.models import (
     CredentialStatus,
     IssuePaymentCredentialRequest,
     PaymentCredential,
+    PaymentPublicConfig,
     PaymentReceipt,
     PaymentRecord,
     PaymentStatus,
@@ -59,6 +60,7 @@ class PaymentService:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.audit = audit or trust.audit
+        self._settings = settings
         if adapter is not None:
             self.adapter = adapter
         elif settings is not None and settings.payment_provider is PaymentProvider.STRIPE:
@@ -204,6 +206,7 @@ class PaymentService:
                 scenario=request.scenario,
                 payment_id=payment_id,
                 idempotency_key=request.idempotency_key,
+                payment_method_id=request.payment_method_id,
             )
             consumed = credential.model_copy(
                 update={"status": CredentialStatus.CONSUMED, "updated_at": self._now()}
@@ -251,6 +254,18 @@ class PaymentService:
         if payment is None:
             raise not_found("payment", payment_id)
         return payment
+
+    def get_public_config(self) -> PaymentPublicConfig:
+        publishable_key = (
+            self._settings.stripe_publishable_key
+            if self.adapter.name == "stripe" and self._settings is not None
+            else None
+        )
+        return PaymentPublicConfig(
+            provider=self.adapter.name,
+            requires_payment_method=self.adapter.name == "stripe",
+            stripe_publishable_key=publishable_key,
+        )
 
     def capture(self, request: CapturePaymentRequest) -> PaymentReceipt:
         fingerprint = self._fingerprint(request)

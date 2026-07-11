@@ -17,6 +17,7 @@ import {
   TruckIcon,
   XIcon,
 } from "./components/Icons";
+import { StripeCardForm } from "./components/StripeCardForm";
 import { api, APIError } from "./lib/api";
 import {
   startRealtimeTranscription,
@@ -44,6 +45,7 @@ import type {
   DomainEvent,
   Order,
   Payment,
+  PaymentPublicConfig,
   TransactionActivity,
   TransactionState,
 } from "./types";
@@ -80,6 +82,7 @@ function App() {
   const [transaction, setTransaction] = useState<AgentTransaction | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentPublicConfig | null>(null);
   const [events, setEvents] = useState<DomainEvent[]>([]);
   const [activities, setActivities] = useState<TransactionActivity[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -185,6 +188,18 @@ function App() {
     return () => {
       active = false;
       activityStreamRef.current?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void api.paymentConfig()
+      .then((config) => {
+        if (active) setPaymentConfig(config);
+      })
+      .catch((cause: unknown) => showError(cause));
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -316,14 +331,14 @@ function App() {
     }
   }
 
-  async function approve() {
+  async function approve(paymentMethodId?: string) {
     if (!transaction || !consent) return;
     const view = viewVersion.current;
     setError(null);
     setBusy("approving");
     const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
-      const next = await api.approve(transaction);
+      const next = await api.approve(transaction, paymentMethodId);
       await applyResult(next, view);
     } catch (cause) {
       showError(cause, view);
@@ -524,7 +539,7 @@ function App() {
 
           {transaction?.proposal && !transaction.order_id && transaction.state !== "FAILED" && (
             <AssistantMessage>
-              <ApprovalCard transaction={transaction} consent={consent} setConsent={setConsent} onApprove={() => void approve()} busy={busy === "approving"} executionState={approvalExecutionState} />
+              <ApprovalCard transaction={transaction} paymentConfig={paymentConfig} consent={consent} setConsent={setConsent} onApprove={(paymentMethodId) => void approve(paymentMethodId)} busy={busy === "approving"} executionState={approvalExecutionState} />
             </AssistantMessage>
           )}
 
@@ -654,7 +669,7 @@ function ProductCard({ transaction }: { transaction: AgentTransaction }) {
   </div>;
 }
 
-function ApprovalCard({ transaction, consent, setConsent, onApprove, busy, executionState }: { transaction: AgentTransaction; consent: boolean; setConsent: (value: boolean) => void; onApprove: () => void; busy: boolean; executionState?: TransactionState }) {
+function ApprovalCard({ transaction, paymentConfig, consent, setConsent, onApprove, busy, executionState }: { transaction: AgentTransaction; paymentConfig: PaymentPublicConfig | null; consent: boolean; setConsent: (value: boolean) => void; onApprove: (paymentMethodId?: string) => void; busy: boolean; executionState?: TransactionState }) {
   const proposal = transaction.proposal!;
   const progress = approvalProgress(executionState ?? transaction.state, proposal.price.total_minor, proposal.price.currency);
   return <div className="approval-card">
@@ -671,7 +686,10 @@ function ApprovalCard({ transaction, consent, setConsent, onApprove, busy, execu
       <span><strong>{sentenceCase(executionState ?? transaction.state)}</strong><small>{progress.detail}</small></span>
     </div> : <>
       <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span className="custom-check"><CheckIcon /></span><span>I approve checkout <strong>{proposal.checkout_id}</strong> version {proposal.checkout_version} for exactly <strong>{formatMoney(proposal.price.total_minor, proposal.price.currency)}</strong>.</span></label>
-      <button className="primary-button" disabled={!consent} onClick={onApprove}>Approve & place order<LockIcon /></button>
+      {!paymentConfig && <button className="primary-button" disabled>Loading secure payment…<LockIcon /></button>}
+      {paymentConfig && !paymentConfig.requires_payment_method && <button className="primary-button" disabled={!consent} onClick={() => onApprove()}>Approve & place order<LockIcon /></button>}
+      {paymentConfig?.requires_payment_method && paymentConfig.stripe_publishable_key && <StripeCardForm publishableKey={paymentConfig.stripe_publishable_key} consent={consent} busy={busy} onApprove={onApprove} />}
+      {paymentConfig?.requires_payment_method && !paymentConfig.stripe_publishable_key && <p className="payment-config-error" role="alert">Stripe card entry needs STRIPE_PUBLISHABLE_KEY configured on the backend.</p>}
     </>}
     <details className="binding"><summary>View approval binding</summary><dl><div><dt>Merchant</dt><dd>{proposal.merchant_id}</dd></div><div><dt>Checkout version</dt><dd>v{proposal.checkout_version}</dd></div><div><dt>Expires</dt><dd>{formatDate(proposal.expires_at)}</dd></div><div><dt>Secure hash</dt><dd>{proposal.content_hash.slice(0, 18)}…</dd></div></dl></details>
   </div>;

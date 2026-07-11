@@ -68,13 +68,27 @@ class AuthorizePaymentRequest(PaymentModel):
     credential_id: str
     approval_id: str
     scenario: PaymentScenario = PaymentScenario.APPROVE
+    payment_method_id: str | None = Field(
+        default=None,
+        min_length=4,
+        max_length=255,
+        pattern=r"^pm_[A-Za-z0-9_]+$",
+    )
     idempotency_key: str
+
+
+class PaymentPublicConfig(PaymentModel):
+    provider: str
+    requires_payment_method: bool
+    stripe_publishable_key: str | None = None
 
 
 class PaymentRecord(PaymentModel):
     payment_id: str
     provider: str
     provider_reference: str
+    provider_error_code: str | None = None
+    decline_code: str | None = None
     transaction_id: str
     approval_id: str
     credential_id: str
