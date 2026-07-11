@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -12,6 +13,7 @@ from fastapi.responses import JSONResponse
 from agent_commerce.api.orchestration_routes import create_orchestration_router
 from agent_commerce.api.payment_routes import create_payment_router
 from agent_commerce.api.routes import create_commerce_router
+from agent_commerce.api.transcription_routes import create_transcription_router
 from agent_commerce.api.trust_routes import create_trust_router
 from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.errors import CommerceError
@@ -21,6 +23,8 @@ from agent_commerce.orchestration.factory import create_default_orchestrator
 from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments import PaymentService
 from agent_commerce.trust import TrustService
+from agent_commerce.transcription import RealtimeTranscriptionService
+from agent_commerce.transcription.service import TranscriptionDelay
 
 
 def create_app(
@@ -28,6 +32,7 @@ def create_app(
     trust_service: TrustService | None = None,
     payment_service: PaymentService | None = None,
     orchestrator: CommerceOrchestrator | None = None,
+    transcription_service: RealtimeTranscriptionService | None = None,
 ) -> FastAPI:
     commerce = service or CommerceService.with_seed_data()
     if payment_service is not None:
@@ -49,6 +54,12 @@ def create_app(
         payments,
     )
     mcp = create_commerce_mcp(commerce)
+    transcription = transcription_service or RealtimeTranscriptionService(
+        os.getenv("OPENAI_API_KEY"),
+        model=os.getenv("OPENAI_TRANSCRIPTION_MODEL", "gpt-realtime-whisper"),
+        language=os.getenv("OPENAI_TRANSCRIPTION_LANGUAGE", "pl") or None,
+        delay=_transcription_delay_from_environment(),
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -92,6 +103,7 @@ def create_app(
     app.include_router(create_trust_router(trust, commerce))
     app.include_router(create_payment_router(payments))
     app.include_router(create_orchestration_router(agent_orchestrator))
+    app.include_router(create_transcription_router(transcription))
     app.mount("/", mcp.streamable_http_app())
     app.state.commerce_service = commerce
     app.state.commerce_mcp = mcp
@@ -99,6 +111,7 @@ def create_app(
     app.state.payment_service = payments
     app.state.audit_ledger = audit
     app.state.commerce_orchestrator = agent_orchestrator
+    app.state.transcription_service = transcription
     return app
 
 
@@ -115,3 +128,12 @@ def _wire_checkout_approval_invalidation(commerce: CommerceService, trust: Trust
         trust.invalidate_checkout(event.subject_id, event.subject_version)
 
     commerce.add_event_handler(handle_event)
+
+
+def _transcription_delay_from_environment() -> TranscriptionDelay:
+    delay = os.getenv("OPENAI_TRANSCRIPTION_DELAY", "low").lower()
+    allowed = {"minimal", "low", "medium", "high", "xhigh"}
+    if delay not in allowed:
+        expected = ", ".join(sorted(allowed))
+        raise RuntimeError(f"OPENAI_TRANSCRIPTION_DELAY must be one of: {expected}")
+    return cast(TranscriptionDelay, delay)

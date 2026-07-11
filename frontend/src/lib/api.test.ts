@@ -32,4 +32,20 @@ describe("browser API contract", () => {
       idempotency_key: "web-approve-txn-1",
     });
   });
+
+  it("exchanges a WebRTC offer for a transcription SDP answer", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("answer-sdp", {
+        status: 201,
+        headers: { "Content-Type": "application/sdp" },
+      }),
+    );
+
+    await expect(api.createTranscriptionSession("offer-sdp")).resolves.toBe("answer-sdp");
+    expect(fetchMock).toHaveBeenCalledWith("/api/realtime/transcription/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: "offer-sdp",
+    });
+  });
 });

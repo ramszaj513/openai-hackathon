@@ -25,6 +25,7 @@ describe("single-chat commerce experience", () => {
 
     expect(screen.getByRole("heading", { name: "What can I take care of?" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Message the commerce agent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start voice input" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try the demo request/i })).toBeInTheDocument();
   });
 

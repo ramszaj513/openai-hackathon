@@ -188,6 +188,9 @@ Planned environment settings:
 ```text
 OPENAI_API_KEY
 OPENAI_MODEL
+OPENAI_TRANSCRIPTION_MODEL=gpt-realtime-whisper
+OPENAI_TRANSCRIPTION_LANGUAGE=pl
+OPENAI_TRANSCRIPTION_DELAY=low
 DATABASE_URL=sqlite:///./runtime/agent-commerce.db
 APP_ENV=development
 BACKEND_BASE_URL=http://localhost:8000

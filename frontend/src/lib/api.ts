@@ -34,6 +34,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function requestSdp(path: string, sdp: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: sdp,
+    });
+  } catch {
+    throw new APIError("BACKEND_UNAVAILABLE", "Cannot reach the commerce backend.", 0);
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    throw new APIError(
+      String(payload?.code ?? "TRANSCRIPTION_ERROR"),
+      String(payload?.message ?? "Could not start voice input."),
+      response.status,
+    );
+  }
+  return response.text();
+}
+
 export const api = {
   async health(): Promise<boolean> {
     try {
@@ -55,6 +78,10 @@ export const api = {
         idempotency_key: `web-start-${crypto.randomUUID()}`,
       }),
     });
+  },
+
+  createTranscriptionSession(sdp: string): Promise<string> {
+    return requestSdp("/api/realtime/transcription/session", sdp);
   },
 
   getTransaction(id: string): Promise<AgentTransaction> {

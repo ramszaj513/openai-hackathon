@@ -6,16 +6,22 @@ import {
   ClockIcon,
   LockIcon,
   MenuIcon,
+  MicrophoneIcon,
   MonitorIcon,
   PackageIcon,
   PlusIcon,
   RefreshIcon,
   ShieldIcon,
   SparkIcon,
+  StopIcon,
   TruckIcon,
   XIcon,
 } from "./components/Icons";
 import { api, APIError } from "./lib/api";
+import {
+  startRealtimeTranscription,
+  type RealtimeTranscriptionSession,
+} from "./lib/realtimeTranscription";
 import {
   ACTIVE_CONVERSATION_KEY,
   loadConversationIndex,
@@ -439,6 +445,12 @@ function Welcome({ onPrompt }: { onPrompt: () => void }) {
 
 function Composer({ draft, setDraft, submit, disabled, hasTransaction, newConversation }: { draft: string; setDraft: (value: string) => void; submit: (event: FormEvent) => void; disabled: boolean; hasTransaction: boolean; newConversation: () => void }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const session = useRef<RealtimeTranscriptionSession | null>(null);
+  const baseDraft = useRef("");
+  const [voiceState, setVoiceState] = useState<"idle" | "connecting" | "recording" | "stopping">("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  useEffect(() => () => session.current?.dispose(), []);
 
   useLayoutEffect(() => {
     const input = textarea.current;
@@ -449,11 +461,46 @@ function Composer({ draft, setDraft, submit, disabled, hasTransaction, newConver
     input.style.overflowY = input.scrollHeight > 160 ? "auto" : "hidden";
   }, [draft]);
 
+  async function toggleVoice() {
+    if (voiceState === "recording") {
+      setVoiceState("stopping");
+      try {
+        await session.current?.stop();
+      } catch (cause) {
+        setVoiceError(cause instanceof Error ? cause.message : "Could not finish voice input.");
+      } finally {
+        session.current = null;
+        setVoiceState("idle");
+      }
+      return;
+    }
+    if (voiceState !== "idle") return;
+    setVoiceError(null);
+    setVoiceState("connecting");
+    baseDraft.current = draft.trimEnd();
+    try {
+      session.current = await startRealtimeTranscription(
+        (transcript) => {
+          const separator = baseDraft.current && transcript ? " " : "";
+          setDraft(`${baseDraft.current}${separator}${transcript}`);
+        },
+        (message) => setVoiceError(message),
+      );
+      setVoiceState("recording");
+    } catch (cause) {
+      setVoiceError(cause instanceof Error ? cause.message : "Could not start voice input.");
+      setVoiceState("idle");
+    }
+  }
+
   return <div className="composer-wrap">
     {hasTransaction ? <button className="start-over" onClick={newConversation}><PlusIcon /> Start another transaction</button> : <form className="composer" onSubmit={submit}>
       <textarea ref={textarea} aria-label="Message the commerce agent" placeholder="Describe what you'd like me to buy…" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} rows={1} disabled={disabled} />
-      <button type="submit" disabled={disabled || !draft.trim()} aria-label="Send message"><ArrowUpIcon /></button>
+      <button type="button" className={`voice-button ${voiceState === "recording" ? "voice-button--recording" : ""}`} disabled={disabled || voiceState === "connecting" || voiceState === "stopping"} aria-label={voiceState === "recording" ? "Stop voice input" : "Start voice input"} aria-pressed={voiceState === "recording"} onClick={() => void toggleVoice()}>{voiceState === "recording" ? <StopIcon /> : <MicrophoneIcon />}</button>
+      <button type="submit" disabled={disabled || voiceState !== "idle" || !draft.trim()} aria-label="Send message"><ArrowUpIcon /></button>
     </form>}
+    {voiceState !== "idle" && <p className="voice-status" role="status"><span />{voiceState === "recording" ? "Listening and transcribing live…" : voiceState === "connecting" ? "Connecting microphone…" : "Finishing transcript…"}</p>}
+    {voiceError && <p className="voice-error" role="alert">{voiceError}</p>}
     <p className="composer-note"><LockIcon /> You always approve the exact total before purchase</p>
   </div>;
 }

@@ -20,6 +20,8 @@ npm run dev
 
 Open `http://localhost:5173`. Vite proxies `/api` and `/health` to `http://127.0.0.1:8000`. For a separately hosted backend, set `VITE_API_BASE_URL` at build time.
 
+The microphone button opens a browser WebRTC connection for live OpenAI transcription. Allow microphone access when prompted. The backend must have `OPENAI_API_KEY`; optional transcription settings are documented in the root `.env.example`.
+
 ## Boundaries
 
 - The browser uses REST only and never imports backend services or repositories.

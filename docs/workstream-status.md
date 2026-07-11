@@ -11,7 +11,7 @@ Last team sync: _not yet recorded_
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | OpenAI/MCP intent-to-resolution transaction orchestration | Bartosz integrates `AgentTransaction` and approval/event endpoints | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
-| Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
+| Experience and integration | Bartosz | `codex/experience` | OpenAI Realtime voice input with live prompt transcription | Team verifies microphone permissions and Polish transcription with a live API key | Ready to integrate |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
@@ -72,3 +72,4 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | 2026-07-11 | Bartosz workstream | Team | Auto-growing message composer and switchable persistent conversation history | Browser-only safe summary index; backend contracts unchanged | Frontend lint, 9 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Non-blocking conversation navigation while agent/API work remains in flight | View-scoped response handling; backend contracts unchanged | Frontend lint, 10 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Clarification replies and immediate optimistic conversation entries | Clarifications create a new authoritative transaction and replace the prior UI entry; backend contracts unchanged | Frontend lint, 12 tests, and production build pass |
+| 2026-07-11 | Bartosz workstream | Team | Live spoken prompt input using OpenAI Realtime transcription over browser WebRTC | Adds a backend-only SDP exchange endpoint; commerce and transaction contracts unchanged | Contract/unit tests added; live-key browser smoke test required |
