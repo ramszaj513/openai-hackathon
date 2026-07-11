@@ -227,6 +227,7 @@ Tool names may receive a project namespace, but their semantics should remain st
 | `get_checkout` | Retrieve authoritative checkout state and version |
 | `get_order` | Retrieve authoritative order and fulfillment state |
 | `get_refund_status` | Retrieve refund progression |
+| `list_transaction_events` | Retrieve merchant transaction events for audit and UI projection |
 
 ### Mutating tools
 
@@ -344,4 +345,3 @@ Before a cross-team interface is considered stable, verify:
 5. Order timeout can be reconciled by retrieving order/checkout state.
 6. Cancellation produces a void or refund according to capture state.
 7. Return and refund remain linked to the original items, order, and payment.
-
