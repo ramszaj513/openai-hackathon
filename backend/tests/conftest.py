@@ -6,9 +6,14 @@ from itertools import count
 
 import pytest
 
+from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.repository import InMemoryCommerceRepository
 from agent_commerce.commerce.seed import build_seed_offers
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.payments import PaymentService
+from agent_commerce.payments.repository import InMemoryPaymentRepository
+from agent_commerce.trust import TrustService
+from agent_commerce.trust.repository import InMemoryTrustRepository
 
 
 @dataclass
@@ -44,3 +49,33 @@ def service(clock: MutableClock, now: datetime) -> CommerceService:
         id_factory=lambda: f"{next(ids):08d}",
     )
 
+
+@pytest.fixture
+def audit(clock: MutableClock) -> AuditLedger:
+    ids = count(1)
+    return AuditLedger(clock=clock, id_factory=lambda: f"{next(ids):08d}")
+
+
+@pytest.fixture
+def trust(clock: MutableClock, audit: AuditLedger) -> TrustService:
+    ids = count(1)
+    return TrustService(
+        InMemoryTrustRepository(),
+        audit,
+        clock=clock,
+        id_factory=lambda: f"{next(ids):08d}",
+    )
+
+
+@pytest.fixture
+def payments(
+    clock: MutableClock, audit: AuditLedger, trust: TrustService
+) -> PaymentService:
+    ids = count(1)
+    return PaymentService(
+        trust,
+        InMemoryPaymentRepository(),
+        audit,
+        clock=clock,
+        id_factory=lambda: f"{next(ids):08d}",
+    )

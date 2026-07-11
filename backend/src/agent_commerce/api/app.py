@@ -9,13 +9,35 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from agent_commerce.api.routes import create_commerce_router
+from agent_commerce.api.payment_routes import create_payment_router
+from agent_commerce.api.trust_routes import create_trust_router
+from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.errors import CommerceError
 from agent_commerce.commerce.service import CommerceService
 from agent_commerce.mcp_server import create_commerce_mcp
+from agent_commerce.payments import PaymentService
+from agent_commerce.trust import TrustService
 
 
-def create_app(service: CommerceService | None = None) -> FastAPI:
+def create_app(
+    service: CommerceService | None = None,
+    trust_service: TrustService | None = None,
+    payment_service: PaymentService | None = None,
+) -> FastAPI:
     commerce = service or CommerceService.with_seed_data()
+    if payment_service is not None:
+        payments = payment_service
+        trust = trust_service or payments.trust
+        audit = payments.audit
+    elif trust_service is not None:
+        trust = trust_service
+        audit = trust.audit
+        payments = PaymentService(trust, audit=audit)
+    else:
+        audit = AuditLedger()
+        trust = TrustService(audit=audit)
+        payments = PaymentService(trust, audit=audit)
+    _wire_checkout_approval_invalidation(commerce, trust)
     mcp = create_commerce_mcp(commerce)
 
     @asynccontextmanager
@@ -57,8 +79,29 @@ def create_app(service: CommerceService | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(create_commerce_router(commerce))
+    app.include_router(create_trust_router(trust, commerce))
+    app.include_router(create_payment_router(payments))
     app.mount("/", mcp.streamable_http_app())
     app.state.commerce_service = commerce
     app.state.commerce_mcp = mcp
+    app.state.trust_service = trust
+    app.state.payment_service = payments
+    app.state.audit_ledger = audit
     return app
 
+
+def _wire_checkout_approval_invalidation(
+    commerce: CommerceService, trust: TrustService
+) -> None:
+    def handle_event(event: Any) -> None:
+        if event.event_type not in {
+            "checkout.updated",
+            "checkout.expired",
+            "checkout.cancelled",
+        }:
+            return
+        if event.subject_version is None:
+            return
+        trust.invalidate_checkout(event.subject_id, event.subject_version)
+
+    commerce.add_event_handler(handle_event)

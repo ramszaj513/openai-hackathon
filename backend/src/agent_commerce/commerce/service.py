@@ -57,6 +57,11 @@ class CommerceService:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self._reservation_duration = timedelta(minutes=reservation_minutes)
+        self._event_handlers: list[Callable[[DomainEvent], None]] = []
+
+    def add_event_handler(self, handler: Callable[[DomainEvent], None]) -> None:
+        """Register an in-process consumer after the event is durably appended."""
+        self._event_handlers.append(handler)
 
     @classmethod
     def with_seed_data(cls, *, now: datetime | None = None) -> CommerceService:
@@ -617,6 +622,7 @@ class CommerceService:
                 offer_version=offer.version,
                 product_id=offer.product.product_id,
                 product_name=offer.product.name,
+                product_category=offer.product.category,
                 variant=offer.variant,
                 quantity=selection.quantity,
                 unit_price=offer.unit_price,
@@ -784,6 +790,8 @@ class CommerceService:
             payload=payload,
         )
         self.repository.append_event(event)
+        for handler in self._event_handlers:
+            handler(event)
 
     def _now(self) -> datetime:
         value = self._clock()
