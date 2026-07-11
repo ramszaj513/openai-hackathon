@@ -14,3 +14,4 @@ runtime/
 *.db-wal
 frontend/node_modules/
 frontend/dist/
+agent_log

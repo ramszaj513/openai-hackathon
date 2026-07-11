@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any, Protocol
 
 from agents import (
@@ -16,7 +17,6 @@ from agents import (
     Runner,
     Tool,
 )
-from agents.mcp import create_static_tool_filter
 from openai.types.shared import Reasoning
 from openai.types.shared.reasoning_effort import ReasoningEffort
 from pydantic import Field
@@ -27,7 +27,6 @@ from agent_commerce.orchestration.activity import (
     ActivityReporter,
     ActivityStatus,
 )
-from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
 from agent_commerce.orchestration.merchant_gateway import MerchantGateway
 from agent_commerce.orchestration.models import (
     NormalizedPurchaseIntent,
@@ -35,6 +34,20 @@ from agent_commerce.orchestration.models import (
     OrchestrationModel,
     RejectedOffer,
 )
+
+AGENT_LOG_PATH = Path(__file__).resolve().parents[4] / "agent_log"
+
+
+def _log_agent_exchange(agent_name: str, request: str, response: OrchestrationModel) -> None:
+    """Append one safe, structured model exchange to the repository-local agent log."""
+    entry = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "agent": agent_name,
+        "request": request,
+        "response": response.model_dump(mode="json"),
+    }
+    with AGENT_LOG_PATH.open("a", encoding="utf-8") as log_file:
+        log_file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
 class IntentAttribute(OrchestrationModel):
@@ -58,6 +71,21 @@ class PurchaseIntentOutput(OrchestrationModel):
     purchase_if_confident: bool
     missing_required_fields: tuple[str, ...]
     clarification_questions: tuple[str, ...]
+
+
+class OfferMatchAssessment(OrchestrationModel):
+    """One model judgment comparing a candidate with the requested product meaning."""
+
+    offer_id: str
+    matches: bool
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+
+
+class OfferComparisonOutput(OrchestrationModel):
+    """Semantic match judgments for every objectively eligible candidate."""
+
+    assessments: tuple[OfferMatchAssessment, ...]
 
 
 class IntentInterpreter(Protocol):
@@ -209,14 +237,18 @@ class DeterministicOfferPlanner:
 
     @staticmethod
     def _evaluate(
-        offer: Offer, intent: NormalizedPurchaseIntent
+        offer: Offer,
+        intent: NormalizedPurchaseIntent,
+        *,
+        check_semantic_attributes: bool = True,
     ) -> tuple[list[str], str | None, int]:
         reasons: list[str] = []
         if offer.available_quantity < intent.quantity:
             reasons.append("Insufficient stock.")
-        for key, expected in intent.required_attributes.items():
-            if offer.product.attributes.get(key) != expected:
-                reasons.append(f"Required attribute {key} is not satisfied.")
+        if check_semantic_attributes:
+            for key, expected in intent.required_attributes.items():
+                if offer.product.attributes.get(key) != expected:
+                    reasons.append(f"Required attribute {key} is not satisfied.")
         if intent.minimum_return_window_days is not None and (
             not offer.return_policy.returnable
             or offer.return_policy.window_days < intent.minimum_return_window_days
@@ -279,9 +311,12 @@ class OpenAIIntentInterpreter:
         reporter: ActivityReporter | None = None,
     ) -> NormalizedPurchaseIntent:
         hooks = ActivityRunHooks(reporter, ActivityPhase.INTENT) if reporter else None
+        agent_request = (
+            f"Current date: {self.today.isoformat()}\nPurchase request: {raw_request}"
+        )
         result = await Runner.run(
             self.agent,
-            f"Current date: {self.today.isoformat()}\nPurchase request: {raw_request}",
+            agent_request,
             max_turns=2,
             hooks=hooks,
             run_config=RunConfig(
@@ -292,6 +327,7 @@ class OpenAIIntentInterpreter:
         output = result.final_output
         if not isinstance(output, PurchaseIntentOutput):
             raise RuntimeError("Intent agent returned an unexpected output type")
+        _log_agent_exchange(self.agent.name, agent_request, output)
         return NormalizedPurchaseIntent(
             product_query=output.product_query,
             category=output.category,
@@ -308,16 +344,16 @@ class OpenAIIntentInterpreter:
 
 
 class OpenAIOfferPlanner:
-    """Read-only offer discovery and selection through the merchant MCP server."""
+    """Semantic offer comparison over broad merchant candidates."""
 
     def __init__(
         self,
         model: str,
-        mcp_url: str,
+        merchant: MerchantGateway,
         reasoning_effort: ReasoningEffort,
     ) -> None:
         self.model = model
-        self.mcp_url = mcp_url
+        self.merchant = merchant
         self.reasoning_effort = reasoning_effort
 
     async def select(
@@ -325,52 +361,117 @@ class OpenAIOfferPlanner:
         intent: NormalizedPurchaseIntent,
         reporter: ActivityReporter | None = None,
     ) -> OfferSelectionPlan:
-        tool_filter = create_static_tool_filter(
-            allowed_tool_names=[
-                "search_offers",
-                "get_offer",
-                "get_delivery_options",
-                "get_return_policy",
-            ]
+        offers = await self.merchant.search_offers(
+            SearchOffersRequest(currency=intent.currency, quantity=intent.quantity)
         )
-        server = CurrentMCPServerStreamableHttp(
-            params={"url": self.mcp_url},
-            cache_tools_list=True,
-            tool_filter=tool_filter,
-            use_structured_content=True,
+        eligible: list[tuple[Offer, str, int]] = []
+        rejected: list[RejectedOffer] = []
+        for offer in offers:
+            reasons, delivery_id, total = DeterministicOfferPlanner._evaluate(
+                offer,
+                intent,
+                check_semantic_attributes=False,
+            )
+            if reasons or delivery_id is None:
+                rejected.append(RejectedOffer(offer_id=offer.offer_id, reasons=tuple(reasons)))
+            else:
+                eligible.append((offer, delivery_id, total))
+        if not eligible:
+            return OfferSelectionPlan(
+                selected_offer_id=None,
+                confidence=1,
+                selection_reason="No merchant offer satisfies the objective purchase constraints.",
+                rejected_offers=tuple(rejected),
+            )
+
+        agent = Agent(
+            name="Commerce semantic offer matcher",
+            model=self.model,
+            model_settings=ModelSettings(
+                reasoning=Reasoning(effort=self.reasoning_effort),
+                verbosity="low",
+            ),
+            instructions=(
+                "Compare the requested product meaning with every supplied candidate. Treat "
+                "different natural-language names and machine attribute keys as potentially "
+                "expressing the same fact. Mark matches=true only when the candidate's name, "
+                "description, category, variant, or structured attributes provide evidence for "
+                "every semantic product requirement. Do not perform price, stock, delivery, or "
+                "return-policy arithmetic; candidates already satisfy those objective checks. "
+                "Return exactly one assessment for every supplied offer_id and never invent IDs."
+            ),
+            output_type=OfferComparisonOutput,
         )
-        async with server:
-            agent = Agent(
-                name="Commerce offer planner",
-                model=self.model,
-                model_settings=ModelSettings(
-                    reasoning=Reasoning(effort=self.reasoning_effort),
-                    verbosity="low",
-                ),
-                mcp_servers=[server],
-                mcp_config={"convert_schemas_to_strict": True},
-                instructions=(
-                    "Use only the read-only merchant tools. Discover offers broadly enough to "
-                    "explain rejected alternatives, enforce every hard constraint, calculate "
-                    "the delivered total, and select an offer only when all hard constraints "
-                    "are satisfied. Search by the intent's product meaning and attributes; never "
-                    "assume a fixed product category. If an exhaustive search finds no suitable "
-                    "offer, return no selection with high confidence and a concise explanation. "
-                    "Never create or complete checkout in this planning step."
-                ),
-                output_type=OfferSelectionPlan,
+        agent_request = json.dumps(
+            {
+                "intent": intent.model_dump(mode="json"),
+                "candidates": [offer.model_dump(mode="json") for offer, _, _ in eligible],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        result = await Runner.run(
+            agent,
+            agent_request,
+            max_turns=2,
+            hooks=(ActivityRunHooks(reporter, ActivityPhase.DISCOVERY) if reporter else None),
+            run_config=RunConfig(
+                workflow_name="commerce-semantic-offer-matching",
+                trace_include_sensitive_data=False,
+            ),
+        )
+        output = result.final_output
+        if not isinstance(output, OfferComparisonOutput):
+            raise RuntimeError("Offer matcher returned an unexpected output type")
+        _log_agent_exchange(agent.name, agent_request, output)
+        return self._build_selection(intent, eligible, rejected, output)
+
+    @staticmethod
+    def _build_selection(
+        intent: NormalizedPurchaseIntent,
+        eligible: list[tuple[Offer, str, int]],
+        rejected: list[RejectedOffer],
+        output: OfferComparisonOutput,
+    ) -> OfferSelectionPlan:
+        candidates = {
+            offer.offer_id: (offer, delivery_id, total)
+            for offer, delivery_id, total in eligible
+        }
+        assessment_ids = [assessment.offer_id for assessment in output.assessments]
+        duplicate_ids = len(assessment_ids) != len(set(assessment_ids))
+        missing_or_unknown_ids = set(assessment_ids) != set(candidates)
+        if duplicate_ids or missing_or_unknown_ids:
+            raise RuntimeError("Offer matcher must assess every candidate exactly once")
+        matches = [assessment for assessment in output.assessments if assessment.matches]
+        semantic_rejections = [
+            RejectedOffer(offer_id=item.offer_id, reasons=(item.reason,))
+            for item in output.assessments
+            if not item.matches
+        ]
+        all_rejected = tuple([*rejected, *semantic_rejections])
+        if not matches:
+            return OfferSelectionPlan(
+                selected_offer_id=None,
+                confidence=max((item.confidence for item in output.assessments), default=1),
+                selection_reason="The agent found no semantic product match among eligible offers.",
+                rejected_offers=all_rejected,
             )
-            result = await Runner.run(
-                agent,
-                "Select an offer for this normalized intent:\n"
-                + json.dumps(intent.model_dump(mode="json"), indent=2),
-                max_turns=8,
-                hooks=(ActivityRunHooks(reporter, ActivityPhase.DISCOVERY) if reporter else None),
-                run_config=RunConfig(
-                    workflow_name="commerce-offer-discovery",
-                    trace_include_sensitive_data=False,
-                ),
-            )
-        if not isinstance(result.final_output, OfferSelectionPlan):
-            raise RuntimeError("Offer planner returned an unexpected output type")
-        return result.final_output
+        selected_assessment = min(
+            matches,
+            key=lambda item: (-item.confidence, candidates[item.offer_id][2]),
+        )
+        selected, delivery_id, _ = candidates[selected_assessment.offer_id]
+        constraints = ["semantic product match", "stock", "budget"]
+        if intent.latest_delivery_date is not None:
+            constraints.append("delivery")
+        if intent.minimum_return_window_days is not None:
+            constraints.append("returns")
+        return OfferSelectionPlan(
+            selected_offer_id=selected.offer_id,
+            selected_offer_version=selected.version,
+            delivery_option_id=delivery_id,
+            confidence=selected_assessment.confidence,
+            selection_reason=selected_assessment.reason,
+            satisfied_constraints=tuple(constraints),
+            rejected_offers=all_rejected,
+        )

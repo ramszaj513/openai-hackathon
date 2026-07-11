@@ -73,7 +73,7 @@ def create_default_orchestrator(
             raise RuntimeError(f"OPENAI_REASONING_EFFORT must be one of: {allowed}")
         reasoning_effort = cast(ReasoningEffort, configured_effort)
         interpreter = OpenAIIntentInterpreter(model, reasoning_effort)
-        planner = OpenAIOfferPlanner(model, mcp_url, reasoning_effort)
+        planner = OpenAIOfferPlanner(model, merchant, reasoning_effort)
     else:
         interpreter = ModelDisabledIntentInterpreter()
         planner = DeterministicOfferPlanner(merchant)
