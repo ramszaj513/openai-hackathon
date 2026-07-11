@@ -447,7 +447,7 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? "sidebar--open" : ""}`}>
         <div className="sidebar__top">
-          <div className="brand"><span className="brand__mark">a</span><span>arc</span></div>
+          <div className="brand"><span className="brand__mark">a</span><span>aShop</span></div>
           <button className="icon-button sidebar__close" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar"><XIcon /></button>
         </div>
         <button className="new-chat" onClick={newConversation}><PlusIcon /><span>New transaction</span></button>
