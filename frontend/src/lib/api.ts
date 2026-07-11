@@ -1,0 +1,126 @@
+import type { AgentTransaction, DomainEvent, Order, Payment } from "../types";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+
+export class APIError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...options?.headers },
+    });
+  } catch {
+    throw new APIError("BACKEND_UNAVAILABLE", "Cannot reach the commerce backend.", 0);
+  }
+
+  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!response.ok) {
+    throw new APIError(
+      String(payload?.code ?? "HTTP_ERROR"),
+      String(payload?.message ?? "The backend rejected the request."),
+      response.status,
+    );
+  }
+  return payload as T;
+}
+
+export const api = {
+  async health(): Promise<boolean> {
+    try {
+      const result = await request<{ status: string }>("/health");
+      return result.status === "ok";
+    } catch {
+      return false;
+    }
+  },
+
+  start(rawRequest: string): Promise<AgentTransaction> {
+    return request("/api/agent/transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: "user-bartosz",
+        agent_id: "commerce-agent",
+        raw_request: rawRequest,
+        payment_scenario: "APPROVE",
+        idempotency_key: `web-start-${crypto.randomUUID()}`,
+      }),
+    });
+  },
+
+  getTransaction(id: string): Promise<AgentTransaction> {
+    return request(`/api/agent/transactions/${id}`);
+  },
+
+  approve(transaction: AgentTransaction): Promise<AgentTransaction> {
+    if (!transaction.proposal) throw new Error("The transaction has no checkout proposal.");
+    return request(`/api/agent/transactions/${transaction.transaction_id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        transaction_id: transaction.transaction_id,
+        user_id: transaction.user_id,
+        approved_content_hash: transaction.proposal.content_hash,
+        idempotency_key: `web-approve-${transaction.transaction_id}`,
+      }),
+    });
+  },
+
+  resume(id: string): Promise<AgentTransaction> {
+    return request(`/api/agent/transactions/${id}/resume`, { method: "POST" });
+  },
+
+  cancel(transaction: AgentTransaction): Promise<AgentTransaction> {
+    return request(`/api/agent/transactions/${transaction.transaction_id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({
+        transaction_id: transaction.transaction_id,
+        reason: "User requested cancellation in chat",
+        idempotency_key: `web-cancel-${transaction.transaction_id}`,
+      }),
+    });
+  },
+
+  createReturn(transaction: AgentTransaction, items: Record<string, number>, reason: string) {
+    return request<AgentTransaction>(`/api/agent/transactions/${transaction.transaction_id}/return`, {
+      method: "POST",
+      body: JSON.stringify({
+        transaction_id: transaction.transaction_id,
+        items,
+        reason,
+        idempotency_key: `web-return-${transaction.transaction_id}`,
+      }),
+    });
+  },
+
+  getOrder(id: string): Promise<Order> {
+    return request(`/api/orders/${id}`);
+  },
+
+  getPayment(id: string): Promise<Payment> {
+    return request(`/api/payments/${id}`);
+  },
+
+  setOrderState(order: Order, state: Order["state"]): Promise<Order> {
+    return request(`/api/demo/orders/${order.order_id}/state`, {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: order.order_id,
+        state,
+        idempotency_key: `web-state-${order.order_id}-${state}`,
+      }),
+    });
+  },
+
+  events(id: string): Promise<DomainEvent[]> {
+    return request(`/api/transactions/${id}/events`);
+  },
+};

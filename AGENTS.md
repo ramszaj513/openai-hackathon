@@ -46,11 +46,11 @@ Optimize work for the canonical end-to-end demo before adding breadth.
 - Use the OpenAI Agents SDK for the commerce agent and its tracing. Keep one primary agent unless a demonstrated scenario requires another.
 - Implement the merchant-facing MCP surface with the official `mcp` Python package and FastMCP using Streamable HTTP.
 - Use SQLAlchemy 2 repositories and Alembic migrations. Default local/demo storage is SQLite in WAL mode behind a configurable `DATABASE_URL`.
-- Implement the demo UI in Streamlit. It communicates with the backend API and does not import backend repositories or mutate the database directly.
+- Implement the demo UI in React and TypeScript with Vite. It communicates with the backend API and does not duplicate backend business rules or mutate the database directly.
 - Use HTTPX for service/API clients and Pytest for tests. Use Ruff for lint/format and mypy for type checking.
 - Use `pydantic-settings` for configuration. Secrets belong in environment variables or an untracked `.env`, never in committed files.
 
-Do not add Redis, Celery, Kafka, Docker as a local prerequisite, a second backend framework, a frontend Node build, or another agent framework without a documented cross-team decision. The hackathon baseline is a modular monolith with one backend process, one Streamlit process, and one SQLite database.
+Do not add Redis, Celery, Kafka, Docker as a local prerequisite, a second backend framework, or another agent framework without a documented cross-team decision. The hackathon baseline is a modular Python backend, one Vite/React frontend process, and one SQLite database. The coordinated frontend framework decision is recorded in `docs/technology-stack.md` and `docs/workstream-status.md`.
 
 Both REST endpoints and MCP tools must call the same application services. Do not duplicate checkout, payment, approval, or order logic inside transport handlers.
 
