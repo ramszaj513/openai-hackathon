@@ -8,9 +8,10 @@ from datetime import date, timedelta
 from typing import Protocol
 
 from agents import Agent, ModelSettings, RunConfig, Runner
-from agents.mcp import MCPServerStreamableHttp, create_static_tool_filter
+from agents.mcp import create_static_tool_filter
 
 from agent_commerce.commerce.models import Offer, SearchOffersRequest
+from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
 from agent_commerce.orchestration.merchant_gateway import MerchantGateway
 from agent_commerce.orchestration.models import (
     NormalizedPurchaseIntent,
@@ -219,7 +220,7 @@ class OpenAIOfferPlanner:
                 "get_return_policy",
             ]
         )
-        server = MCPServerStreamableHttp(
+        server = CurrentMCPServerStreamableHttp(
             params={"url": self.mcp_url},
             cache_tools_list=True,
             tool_filter=tool_filter,
