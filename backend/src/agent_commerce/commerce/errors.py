@@ -38,4 +38,3 @@ def conflict(message: str, **details: Any) -> CommerceError:
 
 def validation_error(message: str, **details: Any) -> CommerceError:
     return CommerceError(code="VALIDATION_ERROR", message=message, details=details or None)
-

@@ -102,6 +102,7 @@ Required semantics:
 - Whether final checkout confirmation is required.
 - Validity window.
 - Revocation status.
+- Reserved and captured cumulative spend, so concurrent approvals cannot exceed the limit.
 
 ### Offer
 
@@ -162,6 +163,7 @@ Required semantics:
 - Approval method and timestamp.
 - Expiry and revocation state.
 - Optional reference to a covering spending mandate.
+- Immutable checkout-proposal hash used by the approval UI and trust service.
 
 ### PaymentAuthorization
 
@@ -175,6 +177,9 @@ Required semantics:
 - Status: pending, authorized, declined, voided, expired, or capture-required.
 - Expiry.
 - Provider reference safe for application use.
+- Originating approval and single-use credential references.
+
+The internal payment lifecycle distinguishes credential issuance, authorization, capture, void, partial/full refund, and reconciliation. The merchant only receives the scoped `PaymentAuthorizationReference`; provider credentials remain inside the payment service.
 
 ### PaymentReceipt
 
@@ -226,6 +231,7 @@ Tool names may receive a project namespace, but their semantics should remain st
 | `get_return_policy` | Retrieve machine-readable return conditions |
 | `get_checkout` | Retrieve authoritative checkout state and version |
 | `get_order` | Retrieve authoritative order and fulfillment state |
+| `get_order_by_checkout` | Reconcile ambiguous checkout completion without creating a duplicate |
 | `get_refund_status` | Retrieve refund progression |
 | `list_transaction_events` | Retrieve merchant transaction events for audit and UI projection |
 
@@ -334,7 +340,20 @@ Consumers must tolerate duplicate event delivery and use `event_id` for deduplic
 
 No component may overwrite another component's authoritative state based only on model output or UI state.
 
-## 7. Contract acceptance scenarios
+## 7. Agent transaction projection
+
+The orchestration layer exposes one `AgentTransaction` projection for the UI and recovery logic. It contains:
+
+- Normalized user intent and clarification questions.
+- Selected offer, confidence, reasoning, rejected offers, and compromises.
+- Current deterministic transaction state and complete transition history.
+- Checkout proposal and approval/payment/order/return references.
+- Processed merchant event IDs.
+- Stable failure code and safe explanation when execution stops.
+
+The projection is not authoritative for merchant checkout/order or provider payment state; it references those authoritative resources.
+
+## 8. Contract acceptance scenarios
 
 Before a cross-team interface is considered stable, verify:
 

@@ -103,6 +103,11 @@ def create_commerce_mcp(service: CommerceService) -> FastMCP:
         """Retrieve authoritative order and fulfillment state."""
         return _execute(lambda: service.get_order(order_id))
 
+    @server.tool(name="get_order_by_checkout")
+    def get_order_by_checkout(checkout_id: str) -> ToolResult:
+        """Reconcile an ambiguous completion by finding the order for a checkout."""
+        return _execute(lambda: service.get_order_by_checkout(checkout_id))
+
     @server.tool(name="cancel_order")
     def cancel_order(request: CancelOrderRequest) -> ToolResult:
         """Cancel an eligible order and emit payment-resolution events."""

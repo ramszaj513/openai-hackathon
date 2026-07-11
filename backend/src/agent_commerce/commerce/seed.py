@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from agent_commerce.commerce.models import (
     DeliveryOption,
@@ -16,7 +16,7 @@ MERCHANT_ID = "merchant-demo-electronics"
 
 
 def build_seed_offers(now: datetime | None = None) -> list[Offer]:
-    current = now or datetime.now(timezone.utc)
+    current = now or datetime.now(UTC)
     today = current.date()
 
     tomorrow_free = DeliveryOption(
@@ -156,4 +156,3 @@ def build_seed_offers(now: datetime | None = None) -> list[Offer]:
 
 def canonical_latest_delivery_date(today: date | None = None) -> date:
     return (today or date.today()) + timedelta(days=1)
-

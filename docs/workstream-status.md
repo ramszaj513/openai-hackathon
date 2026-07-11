@@ -8,10 +8,10 @@ Last team sync: _not yet recorded_
 
 | Workstream | Human owner | Branch | Current outcome being built | Next integration point | Status/blocker |
 |---|---|---|---|---|---|
-| Agent and orchestration | Maciej | `codex/agent-orchestration` | Canonical intent-to-order tool sequence with OpenAI Agents SDK | Search and checkout MCP contract | Not started |
+| Agent and orchestration | Maciej | `codex/agent-orchestration` | OpenAI/MCP intent-to-resolution transaction orchestration | Bartosz integrates `AgentTransaction` and approval/event endpoints | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
-| Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound approval and Python payment simulator | Approval and payment references for completion | Not started |
-| Experience and integration | Bartosz | `codex/experience` | Streamlit intent, exact checkout approval, and transaction timeline UI with live-commerce and deterministic demo modes | Walking-skeleton end-to-end flow | In progress |
+| Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
+| Experience and integration | Bartosz | `codex/experience` | Streamlit intent, approval, and transaction timeline UI | Walking-skeleton end-to-end flow | Ready to itegrate |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
@@ -22,6 +22,8 @@ Record proposed or merged changes that affect another workstream.
 | Date/time | Proposed by | Contract or operation | Change | Affected owners | Decision/status |
 |---|---|---|---|---|---|
 | 2026-07-11 | Kuba | Commerce REST/MCP contract | Implemented structured offers, versioned checkout, completion authority inputs, order/cancel/return, events, and stable errors | Maciej, Piotr, Bartosz | Ready for review on `codex/commerce-mcp` |
+| 2026-07-11 | Piotr workstream | Trust/payment contract | Implemented mandates, proposal hashes, approvals, scoped credentials, authorize/capture/void/refund/recovery, and audit | Maciej, Kuba, Bartosz | Ready for review on `codex/payments-trust` |
+| 2026-07-11 | Maciej workstream | Agent transaction contract | Implemented structured intent, read-only MCP planning, state machine, approval/execution, recovery, events, cancellation, and returns | Kuba, Piotr, Bartosz | Ready for review on `codex/agent-orchestration` |
 
 ## Canonical scenario health
 
@@ -29,17 +31,17 @@ The integration owner updates the first failing step. Do not mark later steps he
 
 | Step | Status | Evidence or first failure |
 |---|---|---|
-| Submit canonical request | Not run | — |
-| Extract structured constraints | Not run | — |
+| Submit canonical request | Passing | Agent REST endpoint and orchestration tests |
+| Extract structured constraints | Passing | Structured OpenAI schema plus deterministic CI fallback |
 | Search structured offers | Passing | Unit, MCP contract, and REST integration tests |
-| Reject invalid offers and select one | Not run | — |
+| Reject invalid offers and select one | Passing | Read-only planner enforces budget, compatibility, delivery, returns, and stock |
 | Create authoritative checkout | Passing | Inventory reservation, version, expiry, totals, and idempotency tests |
-| Present checkout proposal | Not run | — |
-| Approve exact checkout version | Not run | — |
-| Authorize scoped payment | Not run | — |
+| Present checkout proposal | Passing | Exact immutable proposal with hash, terms, and policy context |
+| Approve exact checkout version | Passing | Explicit and mandate approval; automatic invalidation on checkout change |
+| Authorize scoped payment | Passing | Single-use credential and exact merchant/checkout/amount/currency binding |
 | Complete checkout idempotently | Passing | Exact approval/payment binding and duplicate completion tests |
-| Confirm order and capture payment | Not run | — |
-| Display receipt and timeline | Not run | — |
+| Confirm order and capture payment | Passing | Integrated API test covers merchant completion followed by capture |
+| Display receipt and timeline | Failing | Receipt/audit APIs pass; Bartosz's Streamlit rendering is not integrated yet |
 | React to post-purchase event | Passing | Fulfillment transition and persisted merchant event tests |
 | Cancel/return and track refund | Failing | Commerce emits `refund.pending`; Piotr's refund processing is not integrated yet |
 
@@ -62,3 +64,5 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | Date/time | From | To | Outcome | Changed interfaces | Verification/link |
 |---|---|---|---|---|---|
 | 2026-07-11 | Kuba | Maciej, Piotr, Bartosz | Commerce service, REST API, and FastMCP surface ready for integration | Models and operations in `docs/shared-contracts.md`; implementation contracts in `backend/src` | `backend/README.md`; commerce test suite |
+| 2026-07-11 | Piotr workstream | Maciej, Kuba, Bartosz | Trust, payment, audit, and recovery services ready for integration | Adds product category to checkout lines; trust/payment REST surfaces and automatic checkout invalidation | `backend/PAYMENTS_TRUST.md`; trust/payment tests |
+| 2026-07-11 | Maciej workstream | Kuba, Piotr, Bartosz | Agent orchestration and transaction projection ready for integration | Adds merchant lookup by checkout; agent REST surface; OpenAI/MCP and deterministic runtime modes | `backend/AGENT_ORCHESTRATION.md`; orchestration and MCP integration tests |

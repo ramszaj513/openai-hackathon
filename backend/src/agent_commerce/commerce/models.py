@@ -56,12 +56,7 @@ class PriceBreakdown(ContractModel):
 
     @model_validator(mode="after")
     def validate_total(self) -> PriceBreakdown:
-        expected = (
-            self.subtotal_minor
-            - self.discount_minor
-            + self.shipping_minor
-            + self.fees_minor
-        )
+        expected = self.subtotal_minor - self.discount_minor + self.shipping_minor + self.fees_minor
         if not self.tax_included:
             expected += self.tax_minor
         if expected != self.total_minor:
@@ -110,6 +105,7 @@ class CheckoutLine(ContractModel):
     offer_version: int = Field(ge=1)
     product_id: str
     product_name: str
+    product_category: str
     variant: str
     quantity: PositiveQuantity
     unit_price: Money
