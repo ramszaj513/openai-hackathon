@@ -13,7 +13,7 @@ from agent_commerce.trust.models import ApprovalRecord, CheckoutProposal, Spendi
 
 
 class TrustRepository(Protocol):
-    def atomic(self) -> AbstractContextManager[None]: ...
+    def atomic(self) -> AbstractContextManager[bool]: ...
 
     def get_mandate(self, mandate_id: str) -> SpendingMandate | None: ...
 
@@ -46,7 +46,7 @@ class InMemoryTrustRepository:
     idempotency: dict[tuple[str, str], tuple[str, Any]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
 
-    def atomic(self) -> AbstractContextManager[None]:
+    def atomic(self) -> AbstractContextManager[bool]:
         return self._lock
 
     def get_mandate(self, mandate_id: str) -> SpendingMandate | None:

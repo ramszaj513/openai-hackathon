@@ -152,4 +152,3 @@ class RecoveryResult(PaymentModel):
     action: str
     payment: PaymentRecord
     receipt: PaymentReceipt
-

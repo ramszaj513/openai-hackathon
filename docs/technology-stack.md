@@ -190,6 +190,8 @@ PAYMENT_PROVIDER=simulator
 OPENAI_AGENTS_TRACE_INCLUDE_SENSITIVE_DATA=0
 OPENAI_AGENTS_DONT_LOG_MODEL_DATA=1
 OPENAI_AGENTS_DONT_LOG_TOOL_DATA=1
+AGENT_USE_OPENAI=1
+AGENT_USE_MCP=1
 ```
 
 Commit `.env.example`, never `.env`. Tests provide isolated settings and must not require a real OpenAI key unless explicitly marked as live integration tests.
@@ -270,4 +272,3 @@ Framework or dependency changes affecting another owner require a recorded decis
 - [MCP SDK list](https://modelcontextprotocol.io/docs/sdk)
 - [uv projects](https://docs.astral.sh/uv/concepts/projects/)
 - [Streamlit conversational applications](https://docs.streamlit.io/develop/tutorials/chat-and-llm-apps/build-conversational-apps)
-

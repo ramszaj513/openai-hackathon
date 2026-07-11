@@ -110,10 +110,7 @@ def create_trust_router(
         return trust.get_approval(approval_id)
 
     @router.get("/approvals/{approval_id}/evidence", response_model=ApprovalEvidence)
-    def get_approval_evidence(
-        approval_id: str, trust: TrustService = Trust
-    ) -> ApprovalEvidence:
+    def get_approval_evidence(approval_id: str, trust: TrustService = Trust) -> ApprovalEvidence:
         return trust.get_approval_evidence(approval_id)
 
     return router
-

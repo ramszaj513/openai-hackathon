@@ -4,6 +4,8 @@ Owner: **Kuba**
 
 This README covers the commerce/MCP slice. The integrated trust and payment slice is documented in [PAYMENTS_TRUST.md](PAYMENTS_TRUST.md).
 
+The agent transaction layer is documented in [AGENT_ORCHESTRATION.md](AGENT_ORCHESTRATION.md).
+
 This folder contains the merchant-authoritative commerce implementation and its REST/MCP transports. It intentionally does not implement agent reasoning, user approval issuance, payment authorization/capture, or Streamlit UI.
 
 ## Implemented capabilities

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from itertools import count
 
 import pytest
-
 from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.repository import InMemoryCommerceRepository
 from agent_commerce.commerce.seed import build_seed_offers
@@ -29,7 +28,7 @@ class MutableClock:
 
 @pytest.fixture
 def now() -> datetime:
-    return datetime(2026, 7, 11, 10, 0, tzinfo=timezone.utc)
+    return datetime(2026, 7, 11, 10, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -68,9 +67,7 @@ def trust(clock: MutableClock, audit: AuditLedger) -> TrustService:
 
 
 @pytest.fixture
-def payments(
-    clock: MutableClock, audit: AuditLedger, trust: TrustService
-) -> PaymentService:
+def payments(clock: MutableClock, audit: AuditLedger, trust: TrustService) -> PaymentService:
     ids = count(1)
     return PaymentService(
         trust,

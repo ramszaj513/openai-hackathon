@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-
 from agent_commerce.commerce.errors import CommerceError
 from agent_commerce.commerce.models import (
     CompleteCheckoutRequest,
@@ -87,9 +86,7 @@ def approved_checkout(
     return checkout, decision.approval, mandate
 
 
-def authorize_approved_checkout(
-    payments: PaymentService, approval_id: str
-) -> object:
+def authorize_approved_checkout(payments: PaymentService, approval_id: str) -> object:
     credential = payments.issue_credential(
         IssuePaymentCredentialRequest(
             approval_id=approval_id,

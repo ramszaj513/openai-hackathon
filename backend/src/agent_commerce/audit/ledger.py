@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
 
@@ -18,7 +18,7 @@ class AuditLedger:
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self._events: list[AuditEvent] = []
         self._lock = RLock()
@@ -56,4 +56,3 @@ class AuditLedger:
             if transaction_id is not None:
                 events = [event for event in events if event.transaction_id == transaction_id]
             return deepcopy(events)
-

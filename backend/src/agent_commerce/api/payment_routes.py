@@ -91,9 +91,7 @@ def create_payment_router(payment_service: PaymentService) -> APIRouter:
         return payments.recover_authorization(request)
 
     @router.get("/transactions/{transaction_id}/audit", response_model=list[AuditEvent])
-    def list_audit(
-        transaction_id: str, payments: PaymentService = Payments
-    ) -> list[AuditEvent]:
+    def list_audit(transaction_id: str, payments: PaymentService = Payments) -> list[AuditEvent]:
         return payments.audit.list_events(transaction_id)
 
     return router
@@ -104,4 +102,3 @@ def _validate_payment_path(path_payment_id: str, request_payment_id: str) -> Non
         from agent_commerce.commerce.errors import validation_error
 
         raise validation_error("Path payment_id does not match request payment_id")
-

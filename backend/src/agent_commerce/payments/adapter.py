@@ -29,9 +29,7 @@ class PaymentAdapter(Protocol):
         payment_id: str,
     ) -> PaymentRecord: ...
 
-    def capture(
-        self, payment_id: str, order_id: str, amount_minor: int
-    ) -> PaymentRecord: ...
+    def capture(self, payment_id: str, order_id: str, amount_minor: int) -> PaymentRecord: ...
 
     def void(self, payment_id: str) -> PaymentRecord: ...
 
@@ -184,4 +182,3 @@ class SimulatorPaymentAdapter:
         self.repository.save_payment(updated)
         self.repository.save_refund(refund)
         return updated, refund
-

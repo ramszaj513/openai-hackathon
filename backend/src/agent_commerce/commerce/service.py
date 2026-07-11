@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TypeVar
 from uuid import uuid4
 
@@ -23,6 +23,7 @@ from agent_commerce.commerce.models import (
     CreateReturnRequest,
     DeliveryOption,
     DomainEvent,
+    Money,
     Offer,
     OfferSelection,
     Order,
@@ -54,7 +55,7 @@ class CommerceService:
         reservation_minutes: int = 15,
     ) -> None:
         self.repository = repository or InMemoryCommerceRepository()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self._reservation_duration = timedelta(minutes=reservation_minutes)
         self._event_handlers: list[Callable[[DomainEvent], None]] = []
@@ -65,7 +66,7 @@ class CommerceService:
 
     @classmethod
     def with_seed_data(cls, *, now: datetime | None = None) -> CommerceService:
-        seed_now = now or datetime.now(timezone.utc)
+        seed_now = now or datetime.now(UTC)
         repository = InMemoryCommerceRepository()
         for offer in build_seed_offers(seed_now):
             repository.save_offer(offer)
@@ -84,9 +85,11 @@ class CommerceService:
                 continue
             if request.category and offer.product.category != request.category:
                 continue
-            if request.max_unit_price_minor is not None:
-                if offer.unit_price.amount_minor > request.max_unit_price_minor:
-                    continue
+            if (
+                request.max_unit_price_minor is not None
+                and offer.unit_price.amount_minor > request.max_unit_price_minor
+            ):
+                continue
             if query:
                 text = " ".join(
                     (
@@ -317,6 +320,12 @@ class CommerceService:
             raise not_found("order", order_id)
         return order
 
+    def get_order_by_checkout(self, checkout_id: str) -> Order:
+        order = self.repository.get_order_by_checkout(checkout_id)
+        if order is None:
+            raise not_found("order_for_checkout", checkout_id)
+        return order
+
     def cancel_order(self, request: CancelOrderRequest) -> Order:
         fingerprint = self._fingerprint(request)
         with self.repository.atomic():
@@ -391,7 +400,8 @@ class CommerceService:
             updated = order.model_copy(
                 update={
                     "state": request.state,
-                    "cancellable": request.state in {
+                    "cancellable": request.state
+                    in {
                         OrderState.CONFIRMED,
                         OrderState.PROCESSING,
                     },
@@ -449,10 +459,10 @@ class CommerceService:
                 state=ReturnState.AUTHORIZED,
                 items=request.items,
                 reason=request.reason,
-                refund_amount={
-                    "amount_minor": refund_minor,
-                    "currency": order.price.currency,
-                },
+                refund_amount=Money(
+                    amount_minor=refund_minor,
+                    currency=order.price.currency,
+                ),
                 created_at=now,
                 updated_at=now,
             )
@@ -583,9 +593,7 @@ class CommerceService:
             raise validation_error("One checkout cannot contain multiple currencies")
 
     @staticmethod
-    def _combined_delivery_option(
-        offers: list[Offer], delivery_option_id: str
-    ) -> DeliveryOption:
+    def _combined_delivery_option(offers: list[Offer], delivery_option_id: str) -> DeliveryOption:
         selected: list[DeliveryOption] = []
         for offer in offers:
             option = next(
@@ -607,9 +615,7 @@ class CommerceService:
             delivery_option_id=delivery_option_id,
             label=selected[0].label,
             price_minor=max(option.price_minor for option in selected),
-            estimated_delivery_date=max(
-                option.estimated_delivery_date for option in selected
-            ),
+            estimated_delivery_date=max(option.estimated_delivery_date for option in selected),
         )
 
     @staticmethod
@@ -632,9 +638,7 @@ class CommerceService:
         ]
 
     @staticmethod
-    def _calculate_price(
-        lines: Iterable[CheckoutLine], delivery: DeliveryOption
-    ) -> PriceBreakdown:
+    def _calculate_price(lines: Iterable[CheckoutLine], delivery: DeliveryOption) -> PriceBreakdown:
         lines_tuple = tuple(lines)
         subtotal = sum(line.line_total_minor for line in lines_tuple)
         total = subtotal + delivery.price_minor
@@ -771,8 +775,13 @@ class CommerceService:
                 details={"expected": expected, "actual": actual},
             )
 
-    def _emit(self, event_type: str, subject: BaseModel, payload: dict[str, object]) -> None:
-        transaction_id = getattr(subject, "transaction_id")
+    def _emit(
+        self,
+        event_type: str,
+        subject: Checkout | Order | ReturnRecord,
+        payload: dict[str, object],
+    ) -> None:
+        transaction_id = subject.transaction_id
         subject_id = next(
             getattr(subject, field)
             for field in ("return_id", "order_id", "checkout_id")

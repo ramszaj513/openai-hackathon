@@ -1,13 +1,20 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from mcp.types import LATEST_PROTOCOL_VERSION
+from datetime import datetime
 
 from agent_commerce.api import create_app
 from agent_commerce.commerce.models import SearchOffersRequest
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.orchestration.brain import (
+    DeterministicOfferPlanner,
+    RuleBasedIntentInterpreter,
+)
+from agent_commerce.orchestration.merchant_gateway import DirectMerchantGateway
+from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments.service import PaymentService
 from agent_commerce.trust.service import TrustService
+from fastapi.testclient import TestClient
+from mcp.types import LATEST_PROTOCOL_VERSION
 
 
 def test_health_and_offer_search_share_commerce_service(service: CommerceService) -> None:
@@ -21,9 +28,7 @@ def test_health_and_offer_search_share_commerce_service(service: CommerceService
 
     with TestClient(app) as client:
         assert client.get("/health").json() == {"status": "ok"}
-        response = client.post(
-            "/api/offers/search", json=request.model_dump(mode="json")
-        )
+        response = client.post("/api/offers/search", json=request.model_dump(mode="json"))
 
     assert response.status_code == 200
     assert {item["offer_id"] for item in response.json()} == {
@@ -145,9 +150,7 @@ def test_trust_and_payment_api_complete_authorized_purchase(
         assert authorization_response.status_code == 200
         authorization = authorization_response.json()
 
-        evidence = client.get(
-            f"/api/trust/approvals/{approval['approval_id']}/evidence"
-        ).json()
+        evidence = client.get(f"/api/trust/approvals/{approval['approval_id']}/evidence").json()
         order_response = client.post(
             f"/api/checkouts/{checkout['checkout_id']}/complete",
             json={
@@ -172,3 +175,48 @@ def test_trust_and_payment_api_complete_authorized_purchase(
 
     assert capture_response.status_code == 200
     assert capture_response.json()["status"] == "CAPTURED"
+
+
+def test_agent_api_runs_to_approval_and_executes_after_consent(
+    service: CommerceService,
+    trust: TrustService,
+    payments: PaymentService,
+    now: datetime,
+) -> None:
+    gateway = DirectMerchantGateway(service)
+    orchestrator = CommerceOrchestrator(
+        merchant=gateway,
+        trust=trust,
+        payments=payments,
+        intent_interpreter=RuleBasedIntentInterpreter(today=now.date()),
+        offer_planner=DeterministicOfferPlanner(gateway),
+    )
+    app = create_app(service, trust, payments, orchestrator)
+    with TestClient(app) as client:
+        start_response = client.post(
+            "/api/agent/transactions",
+            json={
+                "user_id": "user-agent-api",
+                "agent_id": "agent-api",
+                "raw_request": (
+                    "Buy a Mac-compatible monitor for no more than 1,200 PLN, deliverable "
+                    "tomorrow, with a 30-day return. Buy it if confident."
+                ),
+                "idempotency_key": "agent-api-start",
+            },
+        )
+        assert start_response.status_code == 201
+        pending = start_response.json()
+        assert pending["state"] == "APPROVAL_PENDING"
+        approve_response = client.post(
+            f"/api/agent/transactions/{pending['transaction_id']}/approve",
+            json={
+                "transaction_id": pending["transaction_id"],
+                "user_id": "user-agent-api",
+                "approved_content_hash": pending["proposal"]["content_hash"],
+                "idempotency_key": "agent-api-approve",
+            },
+        )
+
+    assert approve_response.status_code == 200
+    assert approve_response.json()["state"] == "FULFILLING"
