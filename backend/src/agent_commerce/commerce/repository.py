@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from contextlib import AbstractContextManager
+from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Protocol, TypeVar
@@ -48,7 +48,7 @@ class CommerceRepository(Protocol):
 
     def save_idempotent(self, operation: str, key: str, fingerprint: str, value: Any) -> None: ...
 
-    def atomic(self) -> AbstractContextManager[None]: ...
+    def atomic(self) -> AbstractContextManager[bool]: ...
 
 
 @dataclass
@@ -63,7 +63,7 @@ class InMemoryCommerceRepository:
     idempotency: dict[tuple[str, str], tuple[str, Any]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
 
-    def atomic(self) -> AbstractContextManager[None]:
+    def atomic(self) -> AbstractContextManager[bool]:
         return self._lock
 
     def list_offers(self) -> list[Offer]:

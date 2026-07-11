@@ -90,6 +90,10 @@ def create_commerce_router(service: CommerceService) -> APIRouter:
     def get_order(order_id: str, commerce: CommerceService = Service) -> Order:
         return commerce.get_order(order_id)
 
+    @router.get("/checkouts/{checkout_id}/order", response_model=Order)
+    def get_order_by_checkout(checkout_id: str, commerce: CommerceService = Service) -> Order:
+        return commerce.get_order_by_checkout(checkout_id)
+
     @router.post("/orders/{order_id}/cancel", response_model=Order)
     def cancel_order(
         order_id: str,
@@ -127,10 +131,7 @@ def create_commerce_router(service: CommerceService) -> APIRouter:
         return commerce.set_order_state(request)
 
     @router.get("/transactions/{transaction_id}/events", response_model=list[DomainEvent])
-    def list_events(
-        transaction_id: str, commerce: CommerceService = Service
-    ) -> list[DomainEvent]:
+    def list_events(transaction_id: str, commerce: CommerceService = Service) -> list[DomainEvent]:
         return commerce.list_events(transaction_id)
 
     return router
-

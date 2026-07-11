@@ -13,7 +13,7 @@ from agent_commerce.payments.models import PaymentCredential, PaymentRecord, Ref
 
 
 class PaymentRepository(Protocol):
-    def atomic(self) -> AbstractContextManager[None]: ...
+    def atomic(self) -> AbstractContextManager[bool]: ...
 
     def get_credential(self, credential_id: str) -> PaymentCredential | None: ...
 
@@ -44,7 +44,7 @@ class InMemoryPaymentRepository:
     idempotency: dict[tuple[str, str], tuple[str, Any]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
 
-    def atomic(self) -> AbstractContextManager[None]:
+    def atomic(self) -> AbstractContextManager[bool]:
         return self._lock
 
     def get_credential(self, credential_id: str) -> PaymentCredential | None:

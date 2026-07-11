@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
-
 from agent_commerce.commerce.models import SearchOffersRequest
 from agent_commerce.commerce.service import CommerceService
 from agent_commerce.mcp_server import create_commerce_mcp
@@ -26,6 +25,7 @@ async def test_mcp_exposes_canonical_commerce_tools(service: CommerceService) ->
         "cancel_checkout",
         "complete_checkout",
         "get_order",
+        "get_order_by_checkout",
         "cancel_order",
         "create_return",
         "list_transaction_events",

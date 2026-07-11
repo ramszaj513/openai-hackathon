@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TypeVar
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ class PaymentService:
     ) -> None:
         self.trust = trust
         self.repository = repository or InMemoryPaymentRepository()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.audit = audit or trust.audit
         self.adapter = adapter or SimulatorPaymentAdapter(
@@ -61,9 +61,7 @@ class PaymentService:
             clock=self._clock,
         )
 
-    def issue_credential(
-        self, request: IssuePaymentCredentialRequest
-    ) -> PaymentCredential:
+    def issue_credential(self, request: IssuePaymentCredentialRequest) -> PaymentCredential:
         fingerprint = self._fingerprint(request)
         with self.repository.atomic():
             cached = self.repository.get_idempotent(
@@ -336,9 +334,7 @@ class PaymentService:
             )
             return refund
 
-    def recover_authorization(
-        self, request: RecoverAuthorizationRequest
-    ) -> RecoveryResult:
+    def recover_authorization(self, request: RecoverAuthorizationRequest) -> RecoveryResult:
         fingerprint = self._fingerprint(request)
         with self.repository.atomic():
             cached = self.repository.get_idempotent(

@@ -3,9 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-
-from agent_commerce.commerce.errors import CommerceError
 from agent_commerce.api import create_app
+from agent_commerce.commerce.errors import CommerceError
 from agent_commerce.commerce.models import (
     CreateCheckoutRequest,
     OfferSelection,
@@ -41,9 +40,7 @@ def create_checkout(commerce: CommerceService) -> object:
     )
 
 
-def create_proposal(
-    trust: TrustService, commerce: CommerceService
-) -> tuple[object, object]:
+def create_proposal(trust: TrustService, commerce: CommerceService) -> tuple[object, object]:
     checkout = create_checkout(commerce)
     proposal = trust.create_proposal(
         checkout,
@@ -182,7 +179,7 @@ def test_checkout_version_change_invalidates_approval(
         )
     )
     create_app(service, trust)
-    updated = service.update_checkout(
+    service.update_checkout(
         UpdateCheckoutRequest(
             checkout_id=checkout.checkout_id,
             expected_version=checkout.version,

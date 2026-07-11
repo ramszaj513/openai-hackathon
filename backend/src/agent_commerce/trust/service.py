@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TypeVar
 from uuid import uuid4
 
@@ -45,7 +45,7 @@ class TrustService:
         id_factory: Callable[[], str] | None = None,
     ) -> None:
         self.repository = repository or InMemoryTrustRepository()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.audit = audit or AuditLedger(clock=self._clock, id_factory=self._id_factory)
 
@@ -442,9 +442,7 @@ class TrustService:
                 )
             updated = mandate.model_copy(
                 update={
-                    "reserved_amount_minor": max(
-                        0, mandate.reserved_amount_minor - amount_minor
-                    ),
+                    "reserved_amount_minor": max(0, mandate.reserved_amount_minor - amount_minor),
                     "used_amount_minor": mandate.used_amount_minor + amount_minor,
                     "updated_at": self._now(),
                 }
@@ -524,6 +522,8 @@ class TrustService:
         source: ApprovalSource,
         mandate: SpendingMandate | None,
     ) -> ApprovalRecord:
+        if source is ApprovalSource.SPENDING_MANDATE and mandate is None:
+            raise RuntimeError("Mandate approval source requires a mandate")
         existing = self.repository.get_approval_by_proposal(proposal.proposal_id)
         if existing is not None:
             return existing
@@ -566,15 +566,16 @@ class TrustService:
                     }
                 )
             )
+        audit_actor_id = proposal.user_id
+        if source is ApprovalSource.SPENDING_MANDATE:
+            if mandate is None:
+                raise RuntimeError("Mandate approval source requires a mandate")
+            audit_actor_id = mandate.mandate_id
         self.audit.record(
             transaction_id=proposal.transaction_id,
             action="approval.granted",
             actor_type="user" if source is ApprovalSource.EXPLICIT_USER else "policy",
-            actor_id=(
-                proposal.user_id
-                if source is ApprovalSource.EXPLICIT_USER
-                else mandate.mandate_id
-            ),
+            actor_id=audit_actor_id,
             subject_type="approval",
             subject_id=approval.approval_id,
             data={
@@ -611,9 +612,7 @@ class TrustService:
         if proposal.price.total_minor > mandate.max_transaction_minor:
             violations.append("Checkout exceeds the per-transaction spending limit.")
         projected = (
-            mandate.used_amount_minor
-            + mandate.reserved_amount_minor
-            + proposal.price.total_minor
+            mandate.used_amount_minor + mandate.reserved_amount_minor + proposal.price.total_minor
         )
         if projected > mandate.max_total_minor:
             violations.append("Checkout exceeds the remaining cumulative spending limit.")
@@ -621,8 +620,7 @@ class TrustService:
             violations.append("Return window is shorter than the mandate requires.")
         if (
             mandate.latest_delivery_date is not None
-            and proposal.delivery_option.estimated_delivery_date
-            > mandate.latest_delivery_date
+            and proposal.delivery_option.estimated_delivery_date > mandate.latest_delivery_date
         ):
             violations.append("Delivery date is later than the mandate permits.")
         return violations
@@ -636,9 +634,7 @@ class TrustService:
         return proposal
 
     @staticmethod
-    def _require_proposal_actors(
-        proposal: CheckoutProposal, user_id: str, agent_id: str
-    ) -> None:
+    def _require_proposal_actors(proposal: CheckoutProposal, user_id: str, agent_id: str) -> None:
         if proposal.user_id != user_id or proposal.agent_id != agent_id:
             raise CommerceError(code="APPROVAL_INVALID", message="Proposal actor mismatch")
 

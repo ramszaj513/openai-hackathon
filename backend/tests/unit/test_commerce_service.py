@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-
 from agent_commerce.commerce.errors import CommerceError
 from agent_commerce.commerce.models import (
     ApprovalEvidence,
@@ -129,9 +128,7 @@ def test_idempotency_key_rejects_a_different_request(service: CommerceService) -
     assert raised.value.code == "IDEMPOTENCY_CONFLICT"
 
 
-def test_checkout_expiry_releases_inventory(
-    service: CommerceService, clock: MutableClock
-) -> None:
+def test_checkout_expiry_releases_inventory(service: CommerceService, clock: MutableClock) -> None:
     checkout = create_canonical_checkout(service)
     reserved_offer = service.get_offer(checkout.lines[0].offer_id)
     clock.advance(minutes=16)
@@ -142,9 +139,7 @@ def test_checkout_expiry_releases_inventory(
     assert service.get_offer(reserved_offer.offer_id).available_quantity == 5
 
 
-def test_checkout_update_invalidates_old_approval(
-    service: CommerceService, now: datetime
-) -> None:
+def test_checkout_update_invalidates_old_approval(service: CommerceService, now: datetime) -> None:
     checkout = create_canonical_checkout(service)
     approval, payment = valid_authorities(checkout, now)
     updated = service.update_checkout(

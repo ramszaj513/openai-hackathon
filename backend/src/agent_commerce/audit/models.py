@@ -21,4 +21,3 @@ class AuditEvent(BaseModel):
     subject_type: str
     subject_id: str
     data: dict[str, Any]
-
