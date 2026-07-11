@@ -76,4 +76,6 @@ The deterministic simulator remains the default. To exercise real provider seman
 test mode, copy `.env.example` to the ignored `.env`, set `PAYMENT_PROVIDER=stripe`, and provide a
 `STRIPE_SECRET_KEY` beginning with `sk_test_`. The integration uses card PaymentIntents with manual
 capture, so funds are authorized only after exact checkout approval and captured only after the
-merchant confirms an order. Live-mode Stripe keys are intentionally rejected.
+merchant confirms an order. Set the matching `STRIPE_PUBLISHABLE_KEY=pk_test_...` to render Stripe
+Elements in the approval card for interactive card entry. Live-mode Stripe keys are intentionally
+rejected.

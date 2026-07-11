@@ -3,6 +3,7 @@ import type {
   DomainEvent,
   Order,
   Payment,
+  PaymentPublicConfig,
   TransactionAccepted,
   TransactionActivity,
   TransactionState,
@@ -124,7 +125,7 @@ export const api = {
     );
   },
 
-  approve(transaction: AgentTransaction): Promise<AgentTransaction> {
+  approve(transaction: AgentTransaction, paymentMethodId?: string): Promise<AgentTransaction> {
     if (!transaction.proposal) throw new Error("The transaction has no checkout proposal.");
     return request(`/api/agent/transactions/${transaction.transaction_id}/approve`, {
       method: "POST",
@@ -132,6 +133,7 @@ export const api = {
         transaction_id: transaction.transaction_id,
         user_id: transaction.user_id,
         approved_content_hash: transaction.proposal.content_hash,
+        payment_method_id: paymentMethodId,
         idempotency_key: `web-approve-${transaction.transaction_id}`,
       }),
     });
@@ -170,6 +172,10 @@ export const api = {
 
   getPayment(id: string): Promise<Payment> {
     return request(`/api/payments/${id}`);
+  },
+
+  paymentConfig(): Promise<PaymentPublicConfig> {
+    return request("/api/payments/config");
   },
 
   setOrderState(order: Order, state: Order["state"]): Promise<Order> {
