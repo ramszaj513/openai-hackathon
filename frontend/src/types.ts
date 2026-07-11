@@ -207,6 +207,8 @@ export interface Payment {
   payment_id: string;
   provider: string;
   provider_reference: string;
+  provider_error_code: string | null;
+  decline_code: string | null;
   transaction_id: string;
   status: "AUTHORIZED" | "CAPTURED" | "VOIDED" | "DECLINED" | "PARTIALLY_REFUNDED" | "REFUNDED";
   authorized_amount_minor: number;
@@ -214,6 +216,12 @@ export interface Payment {
   refunded_amount_minor: number;
   currency: string;
   order_id: string | null;
+}
+
+export interface PaymentPublicConfig {
+  provider: string;
+  requires_payment_method: boolean;
+  stripe_publishable_key: string | null;
 }
 
 export interface DomainEvent {

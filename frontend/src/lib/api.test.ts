@@ -18,7 +18,7 @@ describe("browser API contract", () => {
       }),
     );
 
-    await api.approve(transaction);
+    await api.approve(transaction, "pm_browser_card");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/agent/transactions/txn-1/approve",
@@ -29,7 +29,24 @@ describe("browser API contract", () => {
       transaction_id: "txn-1",
       user_id: "user-1",
       approved_content_hash: "sha256-current-proposal",
+      payment_method_id: "pm_browser_card",
       idempotency_key: "web-approve-txn-1",
+    });
+  });
+
+  it("exchanges a WebRTC offer for a transcription SDP answer", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("answer-sdp", {
+        status: 201,
+        headers: { "Content-Type": "application/sdp" },
+      }),
+    );
+
+    await expect(api.createTranscriptionSession("offer-sdp")).resolves.toBe("answer-sdp");
+    expect(fetchMock).toHaveBeenCalledWith("/api/realtime/transcription/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: "offer-sdp",
     });
   });
 });

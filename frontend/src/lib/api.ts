@@ -3,6 +3,7 @@ import type {
   DomainEvent,
   Order,
   Payment,
+  PaymentPublicConfig,
   TransactionAccepted,
   TransactionActivity,
   TransactionState,
@@ -53,6 +54,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function requestSdp(path: string, sdp: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: sdp,
+    });
+  } catch {
+    throw new APIError("BACKEND_UNAVAILABLE", "Cannot reach the commerce backend.", 0);
+  }
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    throw new APIError(
+      String(payload?.code ?? "TRANSCRIPTION_ERROR"),
+      String(payload?.message ?? "Could not start voice input."),
+      response.status,
+    );
+  }
+  return response.text();
+}
+
 export const api = {
   async health(): Promise<boolean> {
     try {
@@ -74,6 +98,10 @@ export const api = {
         idempotency_key: `web-start-${crypto.randomUUID()}`,
       }),
     });
+  },
+
+  createTranscriptionSession(sdp: string): Promise<string> {
+    return requestSdp("/api/realtime/transcription/session", sdp);
   },
 
   getTransaction(id: string): Promise<AgentTransaction> {
@@ -124,7 +152,7 @@ export const api = {
     );
   },
 
-  approve(transaction: AgentTransaction): Promise<AgentTransaction> {
+  approve(transaction: AgentTransaction, paymentMethodId?: string): Promise<AgentTransaction> {
     if (!transaction.proposal) throw new Error("The transaction has no checkout proposal.");
     return request(`/api/agent/transactions/${transaction.transaction_id}/approve`, {
       method: "POST",
@@ -132,6 +160,7 @@ export const api = {
         transaction_id: transaction.transaction_id,
         user_id: transaction.user_id,
         approved_content_hash: transaction.proposal.content_hash,
+        payment_method_id: paymentMethodId,
         idempotency_key: `web-approve-${transaction.transaction_id}`,
       }),
     });
@@ -170,6 +199,10 @@ export const api = {
 
   getPayment(id: string): Promise<Payment> {
     return request(`/api/payments/${id}`);
+  },
+
+  paymentConfig(): Promise<PaymentPublicConfig> {
+    return request("/api/payments/config");
   },
 
   setOrderState(order: Order, state: Order["state"]): Promise<Order> {

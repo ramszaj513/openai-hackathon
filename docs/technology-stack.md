@@ -188,12 +188,16 @@ Planned environment settings:
 ```text
 OPENAI_API_KEY
 OPENAI_MODEL
+OPENAI_TRANSCRIPTION_MODEL=gpt-realtime-whisper
+OPENAI_TRANSCRIPTION_LANGUAGE=pl
+OPENAI_TRANSCRIPTION_DELAY=low
 DATABASE_URL=sqlite:///./runtime/agent-commerce.db
 APP_ENV=development
 BACKEND_BASE_URL=http://localhost:8000
 MCP_BASE_URL=http://localhost:8000/mcp
 PAYMENT_PROVIDER=simulator
 STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
 STRIPE_PAYMENT_METHOD=pm_card_visa
 STRIPE_DECLINE_PAYMENT_METHOD=pm_card_visa_chargeDeclined
 STRIPE_API_BASE=https://api.stripe.com/v1

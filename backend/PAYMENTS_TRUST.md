@@ -68,12 +68,22 @@ The simulator is the default and requires no external service. For Stripe test m
 ```text
 PAYMENT_PROVIDER=stripe
 STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_PAYMENT_METHOD=pm_card_visa
 ```
 
 `STRIPE_PAYMENT_METHOD` is a server-side test PaymentMethod identifier, not reusable card data.
 Use `STRIPE_DECLINE_PAYMENT_METHOD` to configure the deterministic decline scenario. The application
 rejects live-mode keys and never returns a Stripe PaymentIntent client secret.
+
+When a publishable key is configured, the browser mounts Stripe Elements inside the exact-checkout
+approval card. Stripe.js sends card fields directly to Stripe and returns an opaque `pm_...` ID. The
+approval API validates that identifier, uses it for one authorization attempt, and does not persist
+it in the transaction projection, audit ledger, or frontend conversation storage.
+
+The UI labels Stripe as a test sandbox and shows Stripe's public successful test card. Live card
+numbers are intentionally rejected by Stripe with `test_mode_live_card`; the adapter persists only
+that safe decline code so the user receives actionable sandbox guidance instead of a generic error.
 
 ## Verification
 

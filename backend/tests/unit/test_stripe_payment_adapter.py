@@ -71,6 +71,7 @@ def test_stripe_card_authorize_capture_and_refund_lifecycle() -> None:
             assert data["confirm"] == ["true"]
             assert data["amount"] == ["119900"]
             assert data["currency"] == ["pln"]
+            assert data["payment_method"] == ["pm_browser_card"]
             assert "client_secret" not in data
             return httpx.Response(
                 200,
@@ -112,6 +113,7 @@ def test_stripe_card_authorize_capture_and_refund_lifecycle() -> None:
         scenario=PaymentScenario.APPROVE,
         payment_id="pay_1",
         idempotency_key="authorize_1",
+        payment_method_id="pm_browser_card",
     )
     captured = adapter.capture(
         authorized.payment_id,
@@ -169,6 +171,8 @@ def test_stripe_decline_is_safe_and_has_no_authorized_amount() -> None:
     assert payment.status is PaymentStatus.DECLINED
     assert payment.authorized_amount_minor == 0
     assert payment.provider_reference == "pi_declined_1"
+    assert payment.provider_error_code == "card_declined"
+    assert payment.decline_code == "generic_decline"
     assert "secret" not in payment.model_dump_json()
 
 
@@ -231,9 +235,17 @@ def test_stripe_settings_require_a_test_mode_key() -> None:
     settings = PaymentSettings(
         payment_provider=PaymentProvider.STRIPE,
         stripe_secret_key="sk_test_configured",
+        stripe_publishable_key="pk_test_configured",
     )
     assert settings.payment_provider is PaymentProvider.STRIPE
     assert "sk_test_configured" not in repr(settings)
+
+    with pytest.raises(ValidationError, match="publishable"):
+        PaymentSettings(
+            payment_provider=PaymentProvider.STRIPE,
+            stripe_secret_key="sk_test_configured",
+            stripe_publishable_key="pk_live_forbidden",
+        )
 
 
 def stripe_key(operation: str, application_key: str) -> str:

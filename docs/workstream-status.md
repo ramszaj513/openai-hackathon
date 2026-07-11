@@ -10,8 +10,8 @@ Last team sync: _not yet recorded_
 |---|---|---|---|---|---|
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | Agent-based semantic offer matching over broad MCP candidates | Bartosz verifies canonical live-agent selection in the UI | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
-| Payments and trust | Piotr | `codex/payments-trust` | Opt-in Stripe test-mode card rail behind the existing payment adapter | Maciej/Bartosz verify the canonical flow with `PAYMENT_PROVIDER=stripe` | Ready to integrate |
-| Experience and integration | Bartosz | `codex/experience` | Realistically paced post-approval execution with live authoritative progress copy | Team rehearses with `DEMO_STEP_DELAY_MS=1200` | Ready to integrate |
+| Payments and trust | Piotr | `codex/payments-trust` | Stripe Elements card entry feeding a safe PaymentMethod ID into exact-checkout authorization | Bartosz verifies card entry and the canonical purchase in the browser | In progress |
+| Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
@@ -26,6 +26,7 @@ Record proposed or merged changes that affect another workstream.
 | 2026-07-11 | Maciej workstream | Agent transaction contract | Implemented structured intent, read-only MCP planning, state machine, approval/execution, recovery, events, cancellation, and returns | Kuba, Piotr, Bartosz | Ready for review on `codex/agent-orchestration` |
 | 2026-07-11 | Bartosz workstream | Frontend runtime and interaction model | Replace Streamlit's phased screens with a React/TypeScript single-chat UI; keep the existing REST transaction contract unchanged | All contributors (local setup), Maciej (API consumer) | Implemented and verified; ready for review |
 | 2026-07-11 | Piotr workstream | Refund status contract | Add compatible `PENDING` and `FAILED` states so asynchronous Stripe refunds are not reported as completed; restore mandate spend only on `COMPLETED` | Maciej, Bartosz, Piotr | Implemented with contract and lifecycle tests; ready for review |
+| 2026-07-11 | Piotr/Bartosz workstreams | Interactive payment handoff | Allow exact-checkout approval to carry a validated Stripe Elements `pm_...` ID for one authorization attempt; never persist it or accept raw card fields | Maciej, Piotr, Bartosz | Implemented; browser verification pending publishable test key |
 
 ## Canonical scenario health
 
@@ -73,5 +74,6 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | 2026-07-11 | Bartosz workstream | Team | Auto-growing message composer and switchable persistent conversation history | Browser-only safe summary index; backend contracts unchanged | Frontend lint, 9 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Non-blocking conversation navigation while agent/API work remains in flight | View-scoped response handling; backend contracts unchanged | Frontend lint, 10 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Clarification replies and immediate optimistic conversation entries | Clarifications create a new authoritative transaction and replace the prior UI entry; backend contracts unchanged | Frontend lint, 12 tests, and production build pass |
+| 2026-07-11 | Bartosz workstream | Team | Live spoken prompt input using OpenAI Realtime transcription over browser WebRTC | Adds a backend-only SDP exchange endpoint; commerce and transaction contracts unchanged | Contract/unit tests added; live-key browser smoke test required |
 | 2026-07-11 | Bartosz workstream | Team | Configurable backend pacing exposes authorization, merchant confirmation, capture, and fulfillment as live approval-card states | Adds optional `DEMO_STEP_DELAY_MS`; transaction contracts unchanged | 20 focused backend tests, frontend lint, 18 tests, and production build pass |
 | 2026-07-11 | Piotr workstream | Maciej, Bartosz | Stripe test-mode authorization, capture, void, decline, refund, safe retries, and provider selection | Compatible refund status extension adds `PENDING` and `FAILED`; simulator remains default | Ruff, format check, mypy, and 53 backend tests pass |

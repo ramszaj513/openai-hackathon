@@ -399,7 +399,10 @@ class CommerceOrchestrator:
             "User explicitly approved the exact checkout proposal.",
             updates={"approval_id": approval.approval_id},
         )
-        transaction = await self._execute_approved(transaction)
+        transaction = await self._execute_approved(
+            transaction,
+            payment_method_id=request.payment_method_id,
+        )
         self.repository.save_idempotent(
             "approve_transaction", request.idempotency_key, fingerprint, transaction
         )
@@ -549,7 +552,12 @@ class CommerceOrchestrator:
         self.get(transaction_id)
         return self.activities.list(transaction_id, after_sequence=after_sequence)
 
-    async def _execute_approved(self, transaction: AgentTransaction) -> AgentTransaction:
+    async def _execute_approved(
+        self,
+        transaction: AgentTransaction,
+        *,
+        payment_method_id: str | None = None,
+    ) -> AgentTransaction:
         if transaction.approval_id is None or transaction.checkout is None:
             raise RuntimeError("Approved transaction is missing approval or checkout")
         approval_id = transaction.approval_id
@@ -573,6 +581,7 @@ class CommerceOrchestrator:
                 credential_id=credential.credential_id,
                 approval_id=approval_id,
                 scenario=transaction.payment_scenario,
+                payment_method_id=payment_method_id,
                 idempotency_key=f"{transaction.transaction_id}:payment-authorization",
             )
         )
@@ -585,7 +594,13 @@ class CommerceOrchestrator:
         )
         self.repository.save(transaction)
         if authorization.payment.status is PaymentStatus.DECLINED:
-            return self._fail(transaction, "PAYMENT_DECLINED", "Payment was declined.")
+            message = (
+                "Stripe sandbox rejected a real card number. Use test card "
+                "4242 4242 4242 4242 with any future expiry and any CVC."
+                if authorization.payment.decline_code == "test_mode_live_card"
+                else "Payment was declined by the sandbox provider."
+            )
+            return self._fail(transaction, "PAYMENT_DECLINED", message)
         if authorization.merchant_reference is None:
             return self._fail(
                 transaction,

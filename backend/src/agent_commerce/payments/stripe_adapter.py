@@ -66,11 +66,12 @@ class StripePaymentAdapter:
         scenario: PaymentScenario,
         payment_id: str,
         idempotency_key: str,
+        payment_method_id: str | None = None,
     ) -> PaymentRecord:
         payment_method = (
             self._decline_payment_method
             if scenario is PaymentScenario.DECLINE
-            else self._payment_method
+            else payment_method_id or self._payment_method
         )
         data = {
             "amount": str(credential.max_amount_minor),
@@ -100,6 +101,8 @@ class StripePaymentAdapter:
                     provider_reference=exc.payment_intent_id or f"declined_{payment_id}",
                     status=PaymentStatus.DECLINED,
                     authorized_amount_minor=0,
+                    provider_error_code=exc.code,
+                    decline_code=exc.decline_code,
                 )
                 self.repository.save_payment(declined)
                 return declined
@@ -344,12 +347,16 @@ class StripePaymentAdapter:
         provider_reference: str,
         status: PaymentStatus,
         authorized_amount_minor: int,
+        provider_error_code: str | None = None,
+        decline_code: str | None = None,
     ) -> PaymentRecord:
         now = self._clock()
         return PaymentRecord(
             payment_id=payment_id,
             provider=self.name,
             provider_reference=provider_reference,
+            provider_error_code=provider_error_code,
+            decline_code=decline_code,
             transaction_id=credential.transaction_id,
             approval_id=credential.approval_id,
             credential_id=credential.credential_id,

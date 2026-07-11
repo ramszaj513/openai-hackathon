@@ -11,6 +11,7 @@ from agent_commerce.payments.models import (
     CapturePaymentRequest,
     IssuePaymentCredentialRequest,
     PaymentCredential,
+    PaymentPublicConfig,
     PaymentReceipt,
     PaymentRecord,
     RecoverAuthorizationRequest,
@@ -29,6 +30,10 @@ def create_payment_router(payment_service: PaymentService) -> APIRouter:
         return payment_service
 
     Payments = Depends(get_payments)
+
+    @router.get("/config", response_model=PaymentPublicConfig)
+    def get_public_config(payments: PaymentService = Payments) -> PaymentPublicConfig:
+        return payments.get_public_config()
 
     @router.post("/credentials", response_model=PaymentCredential, status_code=201)
     def issue_credential(

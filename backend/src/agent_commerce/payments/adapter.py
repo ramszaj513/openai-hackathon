@@ -28,6 +28,7 @@ class PaymentAdapter(Protocol):
         scenario: PaymentScenario,
         payment_id: str,
         idempotency_key: str,
+        payment_method_id: str | None = None,
     ) -> PaymentRecord: ...
 
     def capture(
@@ -72,6 +73,7 @@ class SimulatorPaymentAdapter:
         scenario: PaymentScenario,
         payment_id: str,
         idempotency_key: str,
+        payment_method_id: str | None = None,
     ) -> PaymentRecord:
         now = self._clock()
         status = (

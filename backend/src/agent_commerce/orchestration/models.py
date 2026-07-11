@@ -85,6 +85,12 @@ class ApproveTransactionRequest(OrchestrationModel):
     user_id: str
     approved_content_hash: str
     mandate_id: str | None = None
+    payment_method_id: str | None = Field(
+        default=None,
+        min_length=4,
+        max_length=255,
+        pattern=r"^pm_[A-Za-z0-9_]+$",
+    )
     idempotency_key: str
 
 
