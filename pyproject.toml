@@ -14,7 +14,6 @@ dependencies = [
     "pydantic-settings>=2.10,<3",
     "python-dotenv>=1.1,<2",
     "sqlalchemy>=2.0,<3",
-    "streamlit>=1.46,<2",
     "uvicorn>=0.35,<1",
 ]
 
@@ -40,7 +39,7 @@ where = ["backend/src"]
 [tool.pytest.ini_options]
 addopts = "-q"
 asyncio_mode = "auto"
-testpaths = ["backend/tests", "frontend/tests"]
+testpaths = ["backend/tests"]
 pythonpath = ["."]
 
 [tool.ruff]

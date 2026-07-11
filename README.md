@@ -41,7 +41,7 @@ The complete demo should show:
 
 ```text
 backend/    Python FastAPI application, domain modules, MCP server, and tests
-frontend/   Python Streamlit approval, timeline, and demo application
+frontend/   React/TypeScript single-chat approval, timeline, and demo application
 docs/       Architecture, stack, contracts, and team working agreement
 resources/  Hackathon source materials and deterministic seed inputs
 ```
@@ -65,7 +65,7 @@ The implementation structure inside `backend/` and `frontend/` may evolve, but t
 - OpenAI Agents SDK for the single commerce agent, tool orchestration, and tracing.
 - Official MCP Python SDK with FastMCP and Streamable HTTP for merchant tools.
 - SQLAlchemy 2 and Alembic, using SQLite in WAL mode for the hackathon demo.
-- Streamlit for the Python-only user intent, approval, and transaction timeline UI.
+- React, TypeScript, and Vite for the single-chat intent, approval, and transaction timeline UI.
 - Pytest, HTTPX, Ruff, and mypy for verification.
 
 See [Python technology stack](docs/technology-stack.md) for the decisions, boundaries, and planned layout.

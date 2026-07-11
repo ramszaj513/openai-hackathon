@@ -2,12 +2,12 @@
 
 ## 1. Decision
 
-Build the solution as a **Python 3.12 modular monolith** with two local processes:
+Build the backend as a **Python 3.12 modular monolith** with two local application processes:
 
 - A FastAPI backend for domain logic, orchestration, REST, MCP, events, and persistence.
-- A Streamlit frontend for user intent, approval, transaction timeline, and demo controls.
+- A React/TypeScript frontend for a continuous chat containing user intent, approval, transaction timeline, and demo controls.
 
-The baseline must run locally without Docker, Redis, or a hosted database. All four developers use the same locked Python environment.
+The baseline must run locally without Docker, Redis, or a hosted database. Backend dependencies use the shared locked Python environment; frontend dependencies use the committed npm lockfile.
 
 ## 2. Selected stack
 
@@ -22,7 +22,7 @@ The baseline must run locally without Docker, Redis, or a hosted database. All f
 | MCP transport | Streamable HTTP | Current HTTP transport; mount under the backend and avoid a separate tool service |
 | Persistence | SQLAlchemy 2 + Alembic | Explicit repository boundary, migrations, and SQLite/PostgreSQL portability |
 | Local/demo database | SQLite in WAL mode | Zero infrastructure, deterministic reset, and sufficient concurrency for one backend writer |
-| UI | Streamlit | Fast Python-only chat, approval, status, and timeline experience without a Node build |
+| UI | React 19 + TypeScript + Vite | Fine-grained in-chat interaction, responsive layouts, accessible controls, and predictable client state without page-style reruns |
 | HTTP client | HTTPX | Async-capable service calls and FastAPI-compatible testing |
 | Tests | Pytest + `pytest-asyncio` + HTTPX | Unit, async orchestration, contract, and API tests in one ecosystem |
 | Quality | Ruff + mypy | Fast formatting/linting plus type checking across shared contracts |
@@ -31,7 +31,7 @@ The baseline must run locally without Docker, Redis, or a hosted database. All f
 
 ### One language for consequential behavior
 
-Agent orchestration, commerce, approval, payment, persistence, events, tests, and UI are Python. Teammates can review each other's business logic without switching ecosystems.
+All consequential behavior remains in Python: orchestration, commerce, approval, payment, persistence, events, and authoritative state transitions. The TypeScript frontend only renders safe projections and invokes REST operations, so it cannot recalculate totals or manufacture authority.
 
 ### One backend, multiple clean interfaces
 
@@ -44,6 +44,10 @@ SQLite and an in-process event trigger remove Docker, Redis, Celery, and cloud-d
 ### Strong agent observability
 
 The OpenAI Agents SDK provides traces for model generations, tools, guardrails, and custom spans. SDK traces help debug agent runs; the application's own audit records remain the authoritative transaction evidence.
+
+### Why the frontend decision changed
+
+The phased Streamlit implementation made a single continuous transaction feel like a sequence of separate screens and reruns. The demo requires approval cards, progress, order controls, and recovery state to remain in one stable conversation. React provides that interaction model while the existing REST boundary keeps all consequential rules in the Python backend. This change affects local setup and the experience/orchestration integration owners, but it does not change any commerce, approval, payment, or order schema.
 
 ### FastMCP matches the shared contract
 
@@ -60,8 +64,8 @@ Do not add these to the baseline:
 - Redis, Celery, Kafka, or a workflow engine.
 - Docker as a requirement for local development.
 - PostgreSQL as a requirement for the first demo.
-- React/Next.js or another Node frontend build.
-- Direct database access from Streamlit.
+- A second frontend framework or a server-rendered Node application.
+- Direct database access from the frontend.
 - Both MPP and x402 payment implementations.
 
 Reconsider an exclusion only when a concrete requirement cannot be met by the baseline and record the decision in `workstream-status.md`.
@@ -94,10 +98,12 @@ openai-hackathon/
 |       |-- integration/
 |       `-- e2e/
 |-- frontend/
-|   |-- app.py                    # Streamlit entry point
-|   |-- api_client.py             # HTTPX-only backend client
-|   |-- components/
-|   `-- tests/
+|   |-- src/
+|   |   |-- App.tsx               # Single-chat transaction experience
+|   |   |-- components/           # Presentational UI components
+|   |   `-- lib/api.ts            # Typed REST-only browser client
+|   |-- package.json
+|   `-- vite.config.ts
 |-- alembic/
 |-- docs/
 `-- resources/
@@ -113,18 +119,18 @@ Owns:
 
 - All domain and application services.
 - Database sessions and migrations.
-- REST endpoints for Streamlit.
+- REST endpoints for the React frontend.
 - FastMCP Streamable HTTP endpoint for agents and external clients.
 - OpenAI agent execution.
 - Payment simulator and provider adapters.
 - Transaction audit and event dispatch.
 
-### Streamlit process
+### React/Vite process
 
 Owns:
 
-- Rendering and temporary UI session state.
-- Calling REST endpoints with HTTPX.
+- Rendering and recoverable browser session state.
+- Calling REST endpoints through a typed fetch client.
 - Polling transaction projections during agent, payment, and order progress.
 - Collecting explicit approval and sending it to the backend.
 
@@ -149,7 +155,7 @@ Application services may be called directly in unit tests. The canonical end-to-
 - Store one database file under a runtime-data directory ignored by Git.
 - Enable WAL mode and foreign keys on connection.
 - Make the FastAPI process the only database-writing application process.
-- Let Streamlit read and mutate state only through REST.
+- Let the React frontend read and mutate state only through REST.
 - Use Alembic for schema changes.
 - Provide a deterministic reset operation that recreates the catalog, user profile, mandates, and demo scenarios.
 
@@ -205,11 +211,15 @@ uv sync
 uv run alembic upgrade head
 uv run python -m agent_commerce.seed_demo
 uv run uvicorn agent_commerce.main:app --reload
-uv run streamlit run frontend/app.py
+npm --prefix frontend ci
+npm --prefix frontend run dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy backend/src frontend
+uv run mypy backend/src
+npm --prefix frontend run lint
+npm --prefix frontend run test
+npm --prefix frontend run build
 ```
 
 If scaffolding changes the exact commands, update this document, `README.md`, and `AGENTS.md` in the same change.
@@ -260,7 +270,7 @@ Do not block the judged flow on preview access to MPP, x402, AP2, or shared paym
 - Maciej owns the OpenAI Agents SDK orchestration implementation.
 - Kuba owns FastAPI commerce services and the FastMCP merchant surface.
 - Piotr owns policy, payment simulator, provider adapter, and financial audit behavior.
-- Bartosz owns Streamlit, HTTPX frontend integration, and the end-to-end demo.
+- Bartosz owns the React/TypeScript frontend, REST integration, and the end-to-end demo.
 
 Framework or dependency changes affecting another owner require a recorded decision in `workstream-status.md`.
 
@@ -271,4 +281,5 @@ Framework or dependency changes affecting another owner require a recorded decis
 - [Official MCP Python SDK](https://py.sdk.modelcontextprotocol.io/)
 - [MCP SDK list](https://modelcontextprotocol.io/docs/sdk)
 - [uv projects](https://docs.astral.sh/uv/concepts/projects/)
-- [Streamlit conversational applications](https://docs.streamlit.io/develop/tutorials/chat-and-llm-apps/build-conversational-apps)
+- [React documentation](https://react.dev/)
+- [Vite documentation](https://vite.dev/)

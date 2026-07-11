@@ -260,10 +260,10 @@ Required controlled scenarios:
 
 ## 13. Deployment shape for the hackathon
 
-Logical separation matters more than process count. The implementation is a Python modular monolith with two local processes:
+Logical separation matters more than process count. The implementation uses two local processes:
 
 1. A FastAPI backend containing orchestration, commerce, policy, payment, audit, events, REST, and mounted FastMCP transports.
-2. A Streamlit frontend that uses only the backend API.
+2. A React/TypeScript frontend that uses only the backend API and presents the lifecycle as one continuous chat.
 
 SQLite in WAL mode is the default deterministic database. SQLAlchemy repositories and a configurable `DATABASE_URL` preserve a path to PostgreSQL without requiring Docker or a hosted database during the hackathon.
 
@@ -271,7 +271,7 @@ Recommended evolution:
 
 1. One FastAPI backend with commerce, policy, payment, and orchestration modules.
 2. FastMCP Streamable HTTP mounted under the backend and calling the same application services as REST.
-3. One Streamlit frontend consuming REST transaction state.
+3. One React frontend consuming REST transaction state through a typed API client.
 4. A persisted event/outbox table plus an in-process async trigger for order changes.
 5. Optional Stripe test integration behind the payment adapter.
 
