@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -115,6 +116,7 @@ class CommerceOrchestrator:
         id_factory: Callable[[], str] | None = None,
         autonomous_confidence_threshold: float = 0.9,
         activities: TransactionActivityLog | None = None,
+        demo_step_delay_seconds: float = 0,
     ) -> None:
         self.merchant = merchant
         self.trust = trust
@@ -127,6 +129,7 @@ class CommerceOrchestrator:
         self.activities = activities or TransactionActivityLog(clock=self._clock)
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.autonomous_confidence_threshold = autonomous_confidence_threshold
+        self.demo_step_delay_seconds = max(0, demo_step_delay_seconds)
 
     async def start(self, request: StartPurchaseRequest) -> AgentTransaction:
         submission = self.begin(request)
@@ -559,11 +562,13 @@ class CommerceOrchestrator:
             raise RuntimeError("Approved transaction is missing approval or checkout")
         approval_id = transaction.approval_id
         checkout = transaction.checkout
+        await self._pause_for_demo()
         transaction = self._transition(
             transaction,
             TransactionState.PAYMENT_AUTHORIZING,
             "Issuing a single-use credential and requesting payment authorization.",
         )
+        await self._pause_for_demo()
         credential = self.payments.issue_credential(
             IssuePaymentCredentialRequest(
                 approval_id=approval_id,
@@ -607,11 +612,13 @@ class CommerceOrchestrator:
             TransactionState.PAYMENT_AUTHORIZED,
             "Payment is authorized for the exact approved checkout.",
         )
+        await self._pause_for_demo()
         transaction = self._transition(
             transaction,
             TransactionState.ORDER_COMMITTING,
             "Submitting the authorized checkout to the merchant.",
         )
+        await self._pause_for_demo()
         evidence = self.trust.get_approval_evidence(approval_id)
         try:
             order = await self.merchant.complete_checkout(
@@ -634,7 +641,7 @@ class CommerceOrchestrator:
                 )
             )
             return self._fail(transaction, exc.code, exc.message)
-        return self._capture_confirmed_order(transaction, order.order_id)
+        return await self._capture_confirmed_order(transaction, order.order_id)
 
     async def _recover_ambiguous_completion(
         self, transaction: AgentTransaction
@@ -689,7 +696,7 @@ class CommerceOrchestrator:
             "Order is awaiting fulfillment.",
         )
 
-    def _capture_confirmed_order(
+    async def _capture_confirmed_order(
         self, transaction: AgentTransaction, order_id: str
     ) -> AgentTransaction:
         if transaction.payment_id is None:
@@ -701,6 +708,7 @@ class CommerceOrchestrator:
             "Merchant returned authoritative order confirmation.",
             updates={"order_id": order_id},
         )
+        await self._pause_for_demo()
         self.payments.capture(
             CapturePaymentRequest(
                 payment_id=payment_id,
@@ -713,11 +721,17 @@ class CommerceOrchestrator:
             TransactionState.PAYMENT_CAPTURED,
             "Authorized payment was captured for the confirmed order.",
         )
+        await self._pause_for_demo()
         return self._transition(
             transaction,
             TransactionState.FULFILLING,
             "Order is awaiting fulfillment.",
         )
+
+    async def _pause_for_demo(self) -> None:
+        """Expose real transaction boundaries at a human-readable demo pace."""
+        if self.demo_step_delay_seconds > 0:
+            await asyncio.sleep(self.demo_step_delay_seconds)
 
     def _transition(
         self,

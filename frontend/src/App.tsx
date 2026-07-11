@@ -41,9 +41,35 @@ import type {
   Payment,
   PaymentPublicConfig,
   TransactionActivity,
+  TransactionState,
 } from "./types";
 
 type BusyAction = "starting" | "approving" | "refreshing" | "cancelling" | "returning" | "advancing" | null;
+
+const APPROVAL_EXECUTION_STATES = new Set<TransactionState>([
+  "APPROVAL_PENDING",
+  "APPROVED",
+  "PAYMENT_AUTHORIZING",
+  "PAYMENT_AUTHORIZED",
+  "ORDER_COMMITTING",
+  "RECOVERY_REQUIRED",
+  "ORDER_CONFIRMED",
+  "PAYMENT_CAPTURED",
+  "FULFILLING",
+]);
+
+function latestApprovalExecutionState(
+  activities: TransactionActivity[],
+  fallback: TransactionState,
+): TransactionState {
+  for (let index = activities.length - 1; index >= 0; index -= 1) {
+    const state = activities[index].data.to_state;
+    if (typeof state === "string" && APPROVAL_EXECUTION_STATES.has(state as TransactionState)) {
+      return state as TransactionState;
+    }
+  }
+  return fallback;
+}
 
 function App() {
   const [draft, setDraft] = useState("");
@@ -428,6 +454,9 @@ function App() {
   }
 
   const hasStarted = Boolean(transaction || busy);
+  const approvalExecutionState = transaction && busy === "approving"
+    ? latestApprovalExecutionState(activities, transaction.state)
+    : transaction?.state;
 
   return (
     <div className="app-shell">
@@ -504,11 +533,9 @@ function App() {
 
           {transaction?.proposal && !transaction.order_id && transaction.state !== "FAILED" && (
             <AssistantMessage>
-              <ApprovalCard transaction={transaction} paymentConfig={paymentConfig} consent={consent} setConsent={setConsent} onApprove={(paymentMethodId) => void approve(paymentMethodId)} busy={busy === "approving"} />
+              <ApprovalCard transaction={transaction} paymentConfig={paymentConfig} consent={consent} setConsent={setConsent} onApprove={(paymentMethodId) => void approve(paymentMethodId)} busy={busy === "approving"} executionState={approvalExecutionState} />
             </AssistantMessage>
           )}
-
-          {busy === "approving" && <Thinking label="Securing approval, authorizing payment, and confirming the order…" />}
 
           {transaction?.approval_id && <UserMessage compact>Approved this exact checkout.</UserMessage>}
 
@@ -595,10 +622,11 @@ function ProductCard({ transaction }: { transaction: AgentTransaction }) {
   </div>;
 }
 
-function ApprovalCard({ transaction, paymentConfig, consent, setConsent, onApprove, busy }: { transaction: AgentTransaction; paymentConfig: PaymentPublicConfig | null; consent: boolean; setConsent: (value: boolean) => void; onApprove: (paymentMethodId?: string) => void; busy: boolean }) {
+function ApprovalCard({ transaction, paymentConfig, consent, setConsent, onApprove, busy, executionState }: { transaction: AgentTransaction; paymentConfig: PaymentPublicConfig | null; consent: boolean; setConsent: (value: boolean) => void; onApprove: (paymentMethodId?: string) => void; busy: boolean; executionState?: TransactionState }) {
   const proposal = transaction.proposal!;
+  const progress = approvalProgress(executionState ?? transaction.state, proposal.price.total_minor, proposal.price.currency);
   return <div className="approval-card">
-    <div className="approval-card__head"><div className="approval-icon"><ShieldIcon /></div><div><p className="eyebrow">YOUR APPROVAL</p><h2>Ready to place the order</h2><p>Review the merchant-authoritative checkout below. This is the only point where your consent can move money.</p></div></div>
+    <div className="approval-card__head"><div className="approval-icon"><ShieldIcon /></div><div><p className="eyebrow">{busy ? "SECURE TRANSACTION" : "YOUR APPROVAL"}</p><h2>{busy ? progress.title : "Ready to place the order"}</h2><p>{busy ? progress.message : "Review the merchant-authoritative checkout below. This is the only point where your consent can move money."}</p></div></div>
     <div className="receipt">
       {proposal.lines.map((line) => <div className="receipt__item" key={line.offer_id}><span>{line.product_name}<small>{line.variant} · Qty {line.quantity}</small></span><strong>{formatMoney(line.line_total_minor, proposal.price.currency)}</strong></div>)}
       <div className="receipt__row"><span>Delivery · {proposal.delivery_option.label}<small>Promised {formatDate(proposal.delivery_option.estimated_delivery_date)}</small></span><strong>{formatMoney(proposal.price.shipping_minor, proposal.price.currency)}</strong></div>
@@ -606,13 +634,34 @@ function ApprovalCard({ transaction, paymentConfig, consent, setConsent, onAppro
       <div className="receipt__total"><span>Total</span><strong>{formatMoney(proposal.price.total_minor, proposal.price.currency)}</strong></div>
     </div>
     <div className="terms"><CheckIcon /><span><strong>{proposal.return_policy.window_days}-day returns</strong><small>{proposal.return_policy.description}</small></span></div>
-    <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span className="custom-check"><CheckIcon /></span><span>I approve checkout <strong>{proposal.checkout_id}</strong> version {proposal.checkout_version} for exactly <strong>{formatMoney(proposal.price.total_minor, proposal.price.currency)}</strong>.</span></label>
-    {!paymentConfig && <button className="primary-button" disabled>Loading secure payment…<LockIcon /></button>}
-    {paymentConfig && !paymentConfig.requires_payment_method && <button className="primary-button" disabled={!consent || busy} onClick={() => onApprove()}>{busy ? "Confirming securely…" : "Approve & place order"}<LockIcon /></button>}
-    {paymentConfig?.requires_payment_method && paymentConfig.stripe_publishable_key && <StripeCardForm publishableKey={paymentConfig.stripe_publishable_key} consent={consent} busy={busy} onApprove={onApprove} />}
-    {paymentConfig?.requires_payment_method && !paymentConfig.stripe_publishable_key && <p className="payment-config-error" role="alert">Stripe card entry needs STRIPE_PUBLISHABLE_KEY configured on the backend.</p>}
+    {busy ? <div className="approval-progress" role="status">
+      <span className="approval-progress__pulse"><ClockIcon /></span>
+      <span><strong>{sentenceCase(executionState ?? transaction.state)}</strong><small>{progress.detail}</small></span>
+    </div> : <>
+      <label className="consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span className="custom-check"><CheckIcon /></span><span>I approve checkout <strong>{proposal.checkout_id}</strong> version {proposal.checkout_version} for exactly <strong>{formatMoney(proposal.price.total_minor, proposal.price.currency)}</strong>.</span></label>
+      {!paymentConfig && <button className="primary-button" disabled>Loading secure payment…<LockIcon /></button>}
+      {paymentConfig && !paymentConfig.requires_payment_method && <button className="primary-button" disabled={!consent} onClick={() => onApprove()}>Approve & place order<LockIcon /></button>}
+      {paymentConfig?.requires_payment_method && paymentConfig.stripe_publishable_key && <StripeCardForm publishableKey={paymentConfig.stripe_publishable_key} consent={consent} busy={busy} onApprove={onApprove} />}
+      {paymentConfig?.requires_payment_method && !paymentConfig.stripe_publishable_key && <p className="payment-config-error" role="alert">Stripe card entry needs STRIPE_PUBLISHABLE_KEY configured on the backend.</p>}
+    </>}
     <details className="binding"><summary>View approval binding</summary><dl><div><dt>Merchant</dt><dd>{proposal.merchant_id}</dd></div><div><dt>Checkout version</dt><dd>v{proposal.checkout_version}</dd></div><div><dt>Expires</dt><dd>{formatDate(proposal.expires_at)}</dd></div><div><dt>Secure hash</dt><dd>{proposal.content_hash.slice(0, 18)}…</dd></div></dl></details>
   </div>;
+}
+
+function approvalProgress(state: TransactionState, totalMinor: number, currency: string) {
+  const total = formatMoney(totalMinor, currency);
+  const copy: Partial<Record<TransactionState, { title: string; message: string; detail: string }>> = {
+    APPROVAL_PENDING: { title: "Recording your approval", message: "Binding your consent to this exact checkout before any payment action.", detail: "No funds have moved yet." },
+    APPROVED: { title: "Exact checkout approved", message: "Your approval is recorded and cannot be reused for changed terms.", detail: "No funds have moved yet." },
+    PAYMENT_AUTHORIZING: { title: `Authorizing ${total}`, message: "Requesting a transaction-scoped payment authorization for the exact approved total.", detail: "Payment is being authorized, not captured." },
+    PAYMENT_AUTHORIZED: { title: "Payment authorized", message: `${total} is reserved for this checkout while the merchant confirms the order.`, detail: "Funds are reserved, not captured." },
+    ORDER_COMMITTING: { title: "Waiting for merchant confirmation", message: "Submitting the approved checkout and scoped payment authority to the merchant.", detail: "The purchase is not complete without an order ID." },
+    RECOVERY_REQUIRED: { title: "Verifying the merchant outcome", message: "The response was unclear, so the agent is checking for an existing order before any retry.", detail: "No duplicate order or charge will be attempted." },
+    ORDER_CONFIRMED: { title: "Order confirmed", message: "The merchant returned an authoritative order. Payment can now be captured safely.", detail: "Merchant confirmation received." },
+    PAYMENT_CAPTURED: { title: "Payment captured", message: `${total} was captured only after the merchant confirmed the order.`, detail: "The agent is handing off to fulfillment monitoring." },
+    FULFILLING: { title: "Purchase complete", message: "The order is confirmed and the agent will continue monitoring fulfillment.", detail: "You can safely leave this page." },
+  };
+  return copy[state] ?? copy.APPROVAL_PENDING!;
 }
 
 function OrderCard({ order, payment, transaction, busy, onCancel, onAdvance, returnReason, setReturnReason, onReturn }: { order: Order; payment: Payment; transaction: AgentTransaction; busy: BusyAction; onCancel: () => void; onAdvance: () => void; returnReason: string; setReturnReason: (value: string) => void; onReturn: () => void }) {

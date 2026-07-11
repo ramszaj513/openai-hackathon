@@ -30,6 +30,7 @@ def test_factory_applies_configured_model_and_reasoning(
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-5.6-sol")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
+    monkeypatch.setenv("DEMO_STEP_DELAY_MS", "1200")
 
     orchestrator = create_default_orchestrator(service, trust, payments)
 
@@ -42,6 +43,21 @@ def test_factory_applies_configured_model_and_reasoning(
     assert interpreter.agent.model_settings.reasoning.effort == "high"
     assert planner.model == "gpt-5.6-sol"
     assert planner.reasoning_effort == "high"
+    assert orchestrator.demo_step_delay_seconds == 1.2
+
+
+def test_factory_rejects_invalid_demo_step_delay(
+    monkeypatch: pytest.MonkeyPatch,
+    service: CommerceService,
+    trust: TrustService,
+    payments: PaymentService,
+) -> None:
+    monkeypatch.setenv("AGENT_USE_OPENAI", "0")
+    monkeypatch.setenv("AGENT_USE_MCP", "0")
+    monkeypatch.setenv("DEMO_STEP_DELAY_MS", "slow")
+
+    with pytest.raises(RuntimeError, match="DEMO_STEP_DELAY_MS"):
+        create_default_orchestrator(service, trust, payments)
 
 
 def test_factory_rejects_unknown_reasoning_effort(

@@ -56,6 +56,13 @@ def create_default_orchestrator(
         "no",
     }
     has_key = bool(os.getenv("OPENAI_API_KEY"))
+    try:
+        demo_step_delay_seconds = max(
+            0,
+            int(os.getenv("DEMO_STEP_DELAY_MS", "0")) / 1000,
+        )
+    except ValueError as exc:
+        raise RuntimeError("DEMO_STEP_DELAY_MS must be a non-negative integer") from exc
     merchant: MerchantGateway = (
         MCPMerchantGateway(mcp_url) if use_mcp else DirectMerchantGateway(commerce)
     )
@@ -84,4 +91,5 @@ def create_default_orchestrator(
         intent_interpreter=interpreter,
         offer_planner=planner,
         activities=TransactionActivityLog(),
+        demo_step_delay_seconds=demo_step_delay_seconds,
     )
