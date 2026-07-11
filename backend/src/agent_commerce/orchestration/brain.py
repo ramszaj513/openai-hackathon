@@ -4,15 +4,29 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from typing import Protocol
+from typing import Any, Protocol
 
-from agents import Agent, ModelSettings, RunConfig, Runner
+from agents import (
+    Agent,
+    ModelResponse,
+    ModelSettings,
+    RunConfig,
+    RunContextWrapper,
+    RunHooks,
+    Runner,
+    Tool,
+)
 from agents.mcp import create_static_tool_filter
 from openai.types.shared import Reasoning
 from openai.types.shared.reasoning_effort import ReasoningEffort
 from pydantic import Field
 
 from agent_commerce.commerce.models import Offer, SearchOffersRequest
+from agent_commerce.orchestration.activity import (
+    ActivityPhase,
+    ActivityReporter,
+    ActivityStatus,
+)
 from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
 from agent_commerce.orchestration.merchant_gateway import MerchantGateway
 from agent_commerce.orchestration.models import (
@@ -47,11 +61,91 @@ class PurchaseIntentOutput(OrchestrationModel):
 
 
 class IntentInterpreter(Protocol):
-    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent: ...
+    async def normalize(
+        self,
+        raw_request: str,
+        reporter: ActivityReporter | None = None,
+    ) -> NormalizedPurchaseIntent: ...
 
 
 class OfferPlanner(Protocol):
-    async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan: ...
+    async def select(
+        self,
+        intent: NormalizedPurchaseIntent,
+        reporter: ActivityReporter | None = None,
+    ) -> OfferSelectionPlan: ...
+
+
+class ActivityRunHooks(RunHooks[None]):
+    """Persist safe model and tool lifecycle signals without prompts or outputs."""
+
+    def __init__(self, reporter: ActivityReporter, phase: ActivityPhase) -> None:
+        self.reporter = reporter
+        self.phase = phase
+
+    async def on_llm_start(
+        self,
+        context: RunContextWrapper[None],
+        agent: Agent[None],
+        system_prompt: str | None,
+        input_items: list[Any],
+    ) -> None:
+        self.reporter.record(
+            kind="agent.llm.started",
+            phase=self.phase,
+            status=ActivityStatus.STARTED,
+            title="Model reasoning started",
+            message=f"{agent.name} is processing structured transaction context.",
+        )
+
+    async def on_llm_end(
+        self,
+        context: RunContextWrapper[None],
+        agent: Agent[None],
+        response: ModelResponse,
+    ) -> None:
+        self.reporter.record(
+            kind="agent.llm.completed",
+            phase=self.phase,
+            status=ActivityStatus.COMPLETED,
+            title="Model reasoning completed",
+            message=f"{agent.name} returned a structured result.",
+        )
+
+    async def on_tool_start(
+        self,
+        context: RunContextWrapper[None],
+        agent: Agent[None],
+        tool: Tool,
+    ) -> None:
+        tool_name = str(getattr(tool, "name", tool.__class__.__name__))
+        self.reporter.record(
+            kind="agent.tool.started",
+            phase=self.phase,
+            status=ActivityStatus.STARTED,
+            title=f"Calling {tool_name}",
+            message="The agent is requesting authoritative merchant data.",
+            authority="merchant",
+            data={"tool_name": tool_name},
+        )
+
+    async def on_tool_end(
+        self,
+        context: RunContextWrapper[None],
+        agent: Agent[None],
+        tool: Tool,
+        result: object,
+    ) -> None:
+        tool_name = str(getattr(tool, "name", tool.__class__.__name__))
+        self.reporter.record(
+            kind="agent.tool.completed",
+            phase=self.phase,
+            status=ActivityStatus.COMPLETED,
+            title=f"Completed {tool_name}",
+            message="The merchant returned authoritative structured data.",
+            authority="merchant",
+            data={"tool_name": tool_name},
+        )
 
 
 class DeterministicOfferPlanner:
@@ -60,7 +154,11 @@ class DeterministicOfferPlanner:
     def __init__(self, merchant: MerchantGateway) -> None:
         self.merchant = merchant
 
-    async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan:
+    async def select(
+        self,
+        intent: NormalizedPurchaseIntent,
+        reporter: ActivityReporter | None = None,
+    ) -> OfferSelectionPlan:
         offers = await self.merchant.search_offers(
             SearchOffersRequest(
                 query=intent.product_query,
@@ -175,11 +273,17 @@ class OpenAIIntentInterpreter:
             output_type=PurchaseIntentOutput,
         )
 
-    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
+    async def normalize(
+        self,
+        raw_request: str,
+        reporter: ActivityReporter | None = None,
+    ) -> NormalizedPurchaseIntent:
+        hooks = ActivityRunHooks(reporter, ActivityPhase.INTENT) if reporter else None
         result = await Runner.run(
             self.agent,
             f"Current date: {self.today.isoformat()}\nPurchase request: {raw_request}",
             max_turns=2,
+            hooks=hooks,
             run_config=RunConfig(
                 workflow_name="commerce-intent-normalization",
                 trace_include_sensitive_data=False,
@@ -216,7 +320,11 @@ class OpenAIOfferPlanner:
         self.mcp_url = mcp_url
         self.reasoning_effort = reasoning_effort
 
-    async def select(self, intent: NormalizedPurchaseIntent) -> OfferSelectionPlan:
+    async def select(
+        self,
+        intent: NormalizedPurchaseIntent,
+        reporter: ActivityReporter | None = None,
+    ) -> OfferSelectionPlan:
         tool_filter = create_static_tool_filter(
             allowed_tool_names=[
                 "search_offers",
@@ -257,6 +365,7 @@ class OpenAIOfferPlanner:
                 "Select an offer for this normalized intent:\n"
                 + json.dumps(intent.model_dump(mode="json"), indent=2),
                 max_turns=8,
+                hooks=(ActivityRunHooks(reporter, ActivityPhase.DISCOVERY) if reporter else None),
                 run_config=RunConfig(
                     workflow_name="commerce-offer-discovery",
                     trace_include_sensitive_data=False,

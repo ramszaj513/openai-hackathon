@@ -9,6 +9,7 @@ from agent_commerce.audit import AuditLedger
 from agent_commerce.commerce.repository import InMemoryCommerceRepository
 from agent_commerce.commerce.seed import build_seed_offers
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.orchestration.activity import ActivityReporter
 from agent_commerce.orchestration.models import NormalizedPurchaseIntent
 from agent_commerce.payments import PaymentService
 from agent_commerce.payments.repository import InMemoryPaymentRepository
@@ -40,7 +41,11 @@ class StaticIntentInterpreter:
 
     intent: NormalizedPurchaseIntent
 
-    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
+    async def normalize(
+        self,
+        raw_request: str,
+        reporter: ActivityReporter | None = None,
+    ) -> NormalizedPurchaseIntent:
         return self.intent
 
 

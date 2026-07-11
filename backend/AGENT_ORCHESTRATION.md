@@ -129,15 +129,26 @@ Both paths are covered by automated tests.
 ## REST handoff for Bartosz
 
 ```text
-POST /api/agent/transactions
+POST /api/agent/transactions                                  -> 202 receipt
 GET  /api/agent/transactions/{transaction_id}
+GET  /api/agent/transactions/{transaction_id}/activity?after_sequence=N
+GET  /api/agent/transactions/{transaction_id}/stream          -> SSE
 POST /api/agent/transactions/{transaction_id}/approve
 POST /api/agent/transactions/{transaction_id}/resume
 POST /api/agent/transactions/{transaction_id}/cancel
 POST /api/agent/transactions/{transaction_id}/return
 ```
 
-`AgentTransaction` contains intent, selection explanation, checkout proposal, references, current state, errors, and the complete transition timeline.
+The create response immediately contains the `INTENT_CAPTURED` transaction plus status, activity,
+and stream URLs. Model and MCP processing continues as a background task. `AgentTransaction`
+contains intent, selection explanation, checkout proposal, references, current state, errors, and
+the complete deterministic transition timeline.
+
+The activity endpoint is an append-only, safe UI projection with monotonically increasing sequence
+numbers. It includes transaction transitions, model-call boundaries, MCP tool-call boundaries, and
+structured selection summaries. It deliberately excludes prompts, raw model output, chain-of-thought,
+payment credentials, and sensitive tool payloads. SSE emits `transaction.activity` events and accepts
+the standard `Last-Event-ID` header for reconnection; polling with `after_sequence` is the fallback.
 
 ## Verification
 

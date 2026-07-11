@@ -203,11 +203,33 @@ def test_agent_api_runs_to_approval_and_executes_after_consent(
                 "idempotency_key": "agent-api-start",
             },
         )
-        assert start_response.status_code == 201
-        pending = start_response.json()
+        assert start_response.status_code == 202
+        receipt = start_response.json()
+        assert receipt["transaction"]["state"] == "INTENT_CAPTURED"
+        transaction_id = receipt["transaction"]["transaction_id"]
+        assert receipt["status_url"] == f"/api/agent/transactions/{transaction_id}"
+        pending = client.get(receipt["status_url"]).json()
         assert pending["state"] == "APPROVAL_PENDING"
+        activity_response = client.get(receipt["activity_url"])
+        assert activity_response.status_code == 200
+        activity = activity_response.json()
+        assert [event["sequence"] for event in activity] == list(range(1, len(activity) + 1))
+        assert {event["kind"] for event in activity} >= {
+            "transaction.created",
+            "agent.intent.started",
+            "agent.intent.completed",
+            "agent.selection.completed",
+            "transaction.transition",
+        }
+        cursor_response = client.get(
+            receipt["activity_url"], params={"after_sequence": activity[-2]["sequence"]}
+        )
+        assert [event["sequence"] for event in cursor_response.json()] == [activity[-1]["sequence"]]
+        stream_response = client.get(receipt["stream_url"], params={"once": "true"})
+        assert stream_response.status_code == 200
+        assert "event: transaction.activity" in stream_response.text
         approve_response = client.post(
-            f"/api/agent/transactions/{pending['transaction_id']}/approve",
+            f"/api/agent/transactions/{transaction_id}/approve",
             json={
                 "transaction_id": pending["transaction_id"],
                 "user_id": "user-agent-api",
@@ -215,6 +237,21 @@ def test_agent_api_runs_to_approval_and_executes_after_consent(
                 "idempotency_key": "agent-api-approve",
             },
         )
+        completed_activity = client.get(receipt["activity_url"]).json()
 
     assert approve_response.status_code == 200
     assert approve_response.json()["state"] == "FULFILLING"
+    transitioned_states = {
+        event["data"].get("to_state")
+        for event in completed_activity
+        if event["kind"] == "transaction.transition"
+    }
+    assert {
+        "APPROVED",
+        "PAYMENT_AUTHORIZING",
+        "PAYMENT_AUTHORIZED",
+        "ORDER_COMMITTING",
+        "ORDER_CONFIRMED",
+        "PAYMENT_CAPTURED",
+        "FULFILLING",
+    } <= transitioned_states

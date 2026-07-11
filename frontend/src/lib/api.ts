@@ -1,4 +1,12 @@
-import type { AgentTransaction, DomainEvent, Order, Payment } from "../types";
+import type {
+  AgentTransaction,
+  DomainEvent,
+  Order,
+  Payment,
+  TransactionAccepted,
+  TransactionActivity,
+  TransactionState,
+} from "../types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -11,6 +19,17 @@ export class APIError extends Error {
     super(message);
   }
 }
+
+const START_SETTLED_STATES = new Set<TransactionState>([
+  "CLARIFICATION_REQUIRED",
+  "NO_MATCH",
+  "APPROVAL_PENDING",
+  "FULFILLING",
+  "DELIVERED",
+  "CANCELLED",
+  "REFUNDED",
+  "FAILED",
+]);
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let response: Response;
@@ -44,7 +63,7 @@ export const api = {
     }
   },
 
-  start(rawRequest: string): Promise<AgentTransaction> {
+  start(rawRequest: string): Promise<TransactionAccepted> {
     return request("/api/agent/transactions", {
       method: "POST",
       body: JSON.stringify({
@@ -59,6 +78,50 @@ export const api = {
 
   getTransaction(id: string): Promise<AgentTransaction> {
     return request(`/api/agent/transactions/${id}`);
+  },
+
+  activity(id: string, afterSequence = 0): Promise<TransactionActivity[]> {
+    return request(
+      `/api/agent/transactions/${id}/activity?after_sequence=${afterSequence}`,
+    );
+  },
+
+  streamActivity(
+    id: string,
+    afterSequence: number,
+    onActivity: (activity: TransactionActivity) => void,
+    onDisconnect?: () => void,
+  ): () => void {
+    const stream = new EventSource(
+      `${API_BASE}/api/agent/transactions/${id}/stream?after_sequence=${afterSequence}`,
+    );
+    stream.addEventListener("transaction.activity", (event) => {
+      onActivity(JSON.parse((event as MessageEvent<string>).data) as TransactionActivity);
+    });
+    stream.onerror = () => {
+      stream.close();
+      onDisconnect?.();
+    };
+    return () => stream.close();
+  },
+
+  async waitForStartResult(
+    id: string,
+    onUpdate?: (transaction: AgentTransaction) => void,
+    pollIntervalMs = 500,
+    maxAttempts = 240,
+  ): Promise<AgentTransaction> {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const transaction = await this.getTransaction(id);
+      onUpdate?.(transaction);
+      if (START_SETTLED_STATES.has(transaction.state)) return transaction;
+      await new Promise((resolve) => window.setTimeout(resolve, pollIntervalMs));
+    }
+    throw new APIError(
+      "TRANSACTION_TIMEOUT",
+      "The agent is still working. Refresh this transaction to continue tracking it.",
+      0,
+    );
   },
 
   approve(transaction: AgentTransaction): Promise<AgentTransaction> {

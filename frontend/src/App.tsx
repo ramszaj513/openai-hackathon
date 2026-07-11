@@ -25,7 +25,13 @@ import {
   type ConversationSummary,
 } from "./lib/conversations";
 import { CANONICAL_REQUEST, formatDate, formatMoney, sentenceCase } from "./lib/format";
-import type { AgentTransaction, DomainEvent, Order, Payment } from "./types";
+import type {
+  AgentTransaction,
+  DomainEvent,
+  Order,
+  Payment,
+  TransactionActivity,
+} from "./types";
 
 type BusyAction = "starting" | "approving" | "refreshing" | "cancelling" | "returning" | "advancing" | null;
 
@@ -35,6 +41,7 @@ function App() {
   const [order, setOrder] = useState<Order | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
   const [events, setEvents] = useState<DomainEvent[]>([]);
+  const [activities, setActivities] = useState<TransactionActivity[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>(loadConversationIndex);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() =>
     localStorage.getItem(ACTIVE_CONVERSATION_KEY),
@@ -51,6 +58,37 @@ function App() {
   const conversationEnd = useRef<HTMLDivElement>(null);
   const viewVersion = useRef(0);
   const activeConversationIdRef = useRef(activeConversationId);
+  const activitiesRef = useRef<TransactionActivity[]>([]);
+  const activityStreamRef = useRef<(() => void) | null>(null);
+
+  function replaceActivities(next: TransactionActivity[]) {
+    const ordered = [...next].sort((left, right) => left.sequence - right.sequence);
+    activitiesRef.current = ordered;
+    setActivities(ordered);
+  }
+
+  function appendActivity(next: TransactionActivity) {
+    if (activitiesRef.current.some((item) => item.event_id === next.event_id)) return;
+    replaceActivities([...activitiesRef.current, next]);
+  }
+
+  function followActivity(transactionId: string, view: number) {
+    activityStreamRef.current?.();
+    const cursor = activitiesRef.current.at(-1)?.sequence ?? 0;
+    const close = api.streamActivity(transactionId, cursor, (activity) => {
+      if (
+        view === viewVersion.current &&
+        activeConversationIdRef.current === transactionId
+      ) {
+        appendActivity(activity);
+      }
+    });
+    activityStreamRef.current = close;
+    return () => {
+      close();
+      if (activityStreamRef.current === close) activityStreamRef.current = null;
+    };
+  }
 
   useEffect(() => {
     let active = true;
@@ -63,16 +101,18 @@ function App() {
       void (async () => {
         try {
           const restored = await api.getTransaction(saved);
-          const [restoredOrder, restoredPayment, restoredEvents] = await Promise.all([
+          const [restoredOrder, restoredPayment, restoredEvents, restoredActivities] = await Promise.all([
             restored.order_id ? api.getOrder(restored.order_id) : Promise.resolve(null),
             restored.payment_id ? api.getPayment(restored.payment_id) : Promise.resolve(null),
             api.events(restored.transaction_id).catch(() => []),
+            api.activity(restored.transaction_id).catch(() => []),
           ]);
           if (!active || view !== viewVersion.current) return;
           setTransaction(restored);
           setOrder(restoredOrder);
           setPayment(restoredPayment);
           setEvents(restoredEvents);
+          replaceActivities(restoredActivities);
           const updatedIndex = upsertConversation(loadConversationIndex(), restored);
           saveConversationIndex(updatedIndex);
           setConversations(updatedIndex);
@@ -89,23 +129,26 @@ function App() {
     }
     return () => {
       active = false;
+      activityStreamRef.current?.();
     };
   }, []);
 
   useEffect(() => {
     conversationEnd.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
-  }, [transaction, order, payment, busy, error]);
+  }, [transaction, order, payment, activities, busy, error]);
 
   async function hydrate(next: AgentTransaction, view: number) {
-    const [nextOrder, nextPayment, nextEvents] = await Promise.all([
+    const [nextOrder, nextPayment, nextEvents, nextActivities] = await Promise.all([
       next.order_id ? api.getOrder(next.order_id) : Promise.resolve(null),
       next.payment_id ? api.getPayment(next.payment_id) : Promise.resolve(null),
       api.events(next.transaction_id).catch(() => []),
+      api.activity(next.transaction_id).catch(() => []),
     ]);
     if (view !== viewVersion.current) return;
     setOrder(nextOrder);
     setPayment(nextPayment);
     setEvents(nextEvents);
+    replaceActivities(nextActivities);
   }
 
   function remember(next: AgentTransaction, replaceTransactionId?: string) {
@@ -169,12 +212,33 @@ function App() {
     setPendingMessage(intent);
     setError(null);
     setBusy("starting");
+    let acceptedTransactionId: string | null = null;
     try {
-      const next = await api.start(request);
-      await applyResult(next, view, replaceTransactionId);
+      const accepted = await api.start(request);
+      acceptedTransactionId = accepted.transaction.transaction_id;
+      await applyResult(accepted.transaction, view, replaceTransactionId);
+      const stopFollowing = followActivity(accepted.transaction.transaction_id, view);
+      try {
+        const next = await api.waitForStartResult(
+          accepted.transaction.transaction_id,
+          (update) => {
+            remember(update, replaceTransactionId);
+            if (
+              view === viewVersion.current &&
+              activeConversationIdRef.current === update.transaction_id
+            ) {
+              setTransaction(update);
+            }
+          },
+          accepted.recommended_poll_interval_ms,
+        );
+        await applyResult(next, view, replaceTransactionId);
+      } finally {
+        stopFollowing();
+      }
       if (view === viewVersion.current) setDraft("");
     } catch (cause) {
-      if (!clarification) {
+      if (!clarification && acceptedTransactionId === null) {
         setConversations((current) => {
           const updated = current.filter(
             (conversation) => conversation.transactionId !== replaceTransactionId,
@@ -199,12 +263,14 @@ function App() {
     const view = viewVersion.current;
     setError(null);
     setBusy("approving");
+    const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       const next = await api.approve(transaction);
       await applyResult(next, view);
     } catch (cause) {
       showError(cause, view);
     } finally {
+      stopFollowing();
       if (view === viewVersion.current) setBusy(null);
     }
   }
@@ -214,12 +280,14 @@ function App() {
     const view = viewVersion.current;
     setError(null);
     setBusy("refreshing");
+    const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       const next = await api.resume(transaction.transaction_id);
       await applyResult(next, view);
     } catch (cause) {
       showError(cause, view);
     } finally {
+      stopFollowing();
       if (view === viewVersion.current) setBusy(null);
     }
   }
@@ -229,12 +297,14 @@ function App() {
     const view = viewVersion.current;
     setError(null);
     setBusy("cancelling");
+    const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       const next = await api.cancel(transaction);
       await applyResult(next, view);
     } catch (cause) {
       showError(cause, view);
     } finally {
+      stopFollowing();
       if (view === viewVersion.current) setBusy(null);
     }
   }
@@ -251,6 +321,7 @@ function App() {
     const view = viewVersion.current;
     setBusy("advancing");
     setError(null);
+    const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       await api.setOrderState(order, state);
       const next = await api.resume(transaction.transaction_id);
@@ -258,6 +329,7 @@ function App() {
     } catch (cause) {
       showError(cause, view);
     } finally {
+      stopFollowing();
       if (view === viewVersion.current) setBusy(null);
     }
   }
@@ -267,6 +339,7 @@ function App() {
     const view = viewVersion.current;
     setBusy("returning");
     setError(null);
+    const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       const items = Object.fromEntries(order.lines.map((line) => [line.product_id, line.quantity]));
       const next = await api.createReturn(transaction, items, returnReason.trim());
@@ -274,6 +347,7 @@ function App() {
     } catch (cause) {
       showError(cause, view);
     } finally {
+      stopFollowing();
       if (view === viewVersion.current) setBusy(null);
     }
   }
@@ -283,6 +357,8 @@ function App() {
       setSidebarOpen(false);
       return;
     }
+    activityStreamRef.current?.();
+    activityStreamRef.current = null;
     const view = ++viewVersion.current;
     activeConversationIdRef.current = transactionId;
     setActiveConversationId(transactionId);
@@ -291,6 +367,7 @@ function App() {
     setOrder(null);
     setPayment(null);
     setEvents([]);
+    replaceActivities([]);
     setBusy("refreshing");
     setError(null);
     setPendingMessage(null);
@@ -308,6 +385,8 @@ function App() {
 
   function newConversation() {
     viewVersion.current += 1;
+    activityStreamRef.current?.();
+    activityStreamRef.current = null;
     localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
     activeConversationIdRef.current = null;
     setActiveConversationId(null);
@@ -315,6 +394,7 @@ function App() {
     setOrder(null);
     setPayment(null);
     setEvents([]);
+    replaceActivities([]);
     setError(null);
     setBusy(null);
     setPendingMessage(null);
@@ -385,6 +465,17 @@ function App() {
             <AssistantMessage tone="error"><div className="assistant-copy"><h2>I couldn't complete that request</h2><p>{transaction.last_error_message}</p></div></AssistantMessage>
           )}
 
+          {transaction?.state === "NO_MATCH" && transaction.selection && (
+            <AssistantMessage>
+              <div className="assistant-copy">
+                <p className="eyebrow"><SparkIcon /> Search complete</p>
+                <h2>I couldn't find a good match.</h2>
+                <p>{transaction.selection.selection_reason}</p>
+                <p>I won't recommend or purchase an option that does not satisfy your request.</p>
+              </div>
+            </AssistantMessage>
+          )}
+
           {transaction?.selection && transaction.selected_offer && transaction.intent && (
             <AssistantMessage>
               <div className="assistant-copy">
@@ -415,8 +506,8 @@ function App() {
 
           {error && <AssistantMessage tone="error"><div className="assistant-copy"><h2>Something needs attention</h2><p>{error}</p><button className="text-button" onClick={() => setError(null)}>Dismiss</button></div></AssistantMessage>}
 
-          {transaction && transaction.transitions.length > 0 && (
-            <AssistantMessage subtle><Timeline transaction={transaction} events={events} /></AssistantMessage>
+          {transaction && (activities.length > 0 || transaction.transitions.length > 0) && (
+            <AssistantMessage subtle><Timeline transaction={transaction} events={events} activities={activities} live={busy === "starting" || busy === "approving"} /></AssistantMessage>
           )}
           <div ref={conversationEnd} />
         </section>
@@ -522,8 +613,64 @@ function OrderCard({ order, payment, transaction, busy, onCancel, onAdvance, ret
   </div>;
 }
 
-function Timeline({ transaction, events }: { transaction: AgentTransaction; events: DomainEvent[] }) {
-  return <details className="timeline"><summary><span><ClockIcon /><strong>Transaction activity</strong><small>{transaction.transitions.length} state changes · {events.length} merchant events</small></span><ChevronIcon /></summary><ol>{transaction.transitions.map((item, index) => <li key={`${item.occurred_at}-${index}`}><span className="timeline__dot"><CheckIcon /></span><div><strong>{sentenceCase(item.to_state)}</strong><p>{item.reason}</p><time>{new Date(item.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div></li>)}</ol><p className="correlation">Correlation ID · {transaction.transaction_id}</p></details>;
+function Timeline({ transaction, events, activities, live }: { transaction: AgentTransaction; events: DomainEvent[]; activities: TransactionActivity[]; live: boolean }) {
+  const [open, setOpen] = useState(live);
+  const rawItems = activities.length > 0
+    ? activities
+    : transaction.transitions.map((transition, index): TransactionActivity => ({
+        event_id: `legacy-${index}`,
+        sequence: index + 1,
+        transaction_id: transaction.transaction_id,
+        kind: "transaction.transition",
+        phase: "SYSTEM",
+        status: "COMPLETED",
+        title: sentenceCase(transition.to_state),
+        message: transition.reason,
+        actor_type: "agent",
+        actor_id: transaction.agent_id,
+        authority: "orchestrator",
+        occurred_at: transition.occurred_at,
+        data: {},
+      }));
+  const meaningfulTransitions = rawItems.filter((item) => {
+    if (item.kind !== "transaction.transition") return false;
+    const state = String(item.data.to_state ?? item.title.toUpperCase().replaceAll(" ", "_"));
+    return !["INTENT_CAPTURED", "DISCOVERING", "CLARIFICATION_REQUIRED"].includes(state);
+  });
+  const firstActivity = rawItems[0];
+  const firstMeaningfulTransition = meaningfulTransitions[0];
+  const searchStatus = transaction.state === "FAILED"
+    ? "FAILED"
+    : transaction.state === "CLARIFICATION_REQUIRED"
+    ? "WAITING"
+    : meaningfulTransitions.length > 0
+      ? "COMPLETED"
+      : "STARTED";
+  const searchingOffers: TransactionActivity | null = firstActivity ? {
+    event_id: `${transaction.transaction_id}:searching-offers`,
+    sequence: 0,
+    transaction_id: transaction.transaction_id,
+    kind: "ui.search_summary",
+    phase: "DISCOVERY",
+    status: searchStatus,
+    title: "Searching offers",
+    message: searchStatus === "STARTED"
+      ? "The agent is searching connected merchants and comparing eligible offers."
+      : searchStatus === "WAITING"
+        ? "The search is waiting for the requested clarification."
+        : searchStatus === "FAILED"
+          ? "The offer search could not be completed."
+          : "The agent searched connected merchants and evaluated the eligible offers.",
+    actor_type: "agent",
+    actor_id: transaction.agent_id,
+    authority: "agent",
+    occurred_at: firstMeaningfulTransition?.occurred_at ?? firstActivity.occurred_at,
+    data: {},
+  } : null;
+  const items = searchingOffers
+    ? [searchingOffers, ...meaningfulTransitions]
+    : meaningfulTransitions;
+  return <details className="timeline" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary><span><ClockIcon /><strong>{live ? "Agent is working" : "Transaction activity"}</strong><small>{items.length} commerce {items.length === 1 ? "step" : "steps"} · {events.length} merchant events</small></span><ChevronIcon /></summary><ol>{items.map((item) => <li key={item.event_id}><span className={`timeline__dot timeline__dot--${item.status.toLowerCase()}`}>{item.status === "STARTED" ? <ClockIcon /> : item.status === "FAILED" ? <XIcon /> : <CheckIcon />}</span><div><strong>{item.title}</strong><p>{item.message}</p><time>{sentenceCase(item.phase)} · {sentenceCase(item.status)} · {new Date(item.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></div></li>)}</ol><p className="correlation">Correlation ID · {transaction.transaction_id}</p></details>;
 }
 
 export default App;

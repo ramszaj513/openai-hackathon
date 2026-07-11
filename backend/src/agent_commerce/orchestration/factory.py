@@ -8,6 +8,7 @@ from typing import cast
 from openai.types.shared.reasoning_effort import ReasoningEffort
 
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.orchestration.activity import ActivityReporter, TransactionActivityLog
 from agent_commerce.orchestration.brain import (
     DeterministicOfferPlanner,
     IntentInterpreter,
@@ -31,7 +32,11 @@ VALID_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", 
 class ModelDisabledIntentInterpreter:
     """Keep non-agent APIs available when model execution is explicitly disabled."""
 
-    async def normalize(self, raw_request: str) -> NormalizedPurchaseIntent:
+    async def normalize(
+        self,
+        raw_request: str,
+        reporter: ActivityReporter | None = None,
+    ) -> NormalizedPurchaseIntent:
         raise RuntimeError(
             "Intent interpretation requires the OpenAI model; set AGENT_USE_OPENAI=1 "
             "and configure OPENAI_API_KEY and OPENAI_MODEL"
@@ -78,4 +83,5 @@ def create_default_orchestrator(
         payments=payments,
         intent_interpreter=interpreter,
         offer_planner=planner,
+        activities=TransactionActivityLog(),
     )
