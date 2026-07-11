@@ -55,4 +55,3 @@ def test_proposal_binding_changes_with_material_checkout_change() -> None:
 
 def test_money_is_formatted_from_minor_units() -> None:
     assert format_money(114_900, "PLN") == "1 149.00 PLN"
-

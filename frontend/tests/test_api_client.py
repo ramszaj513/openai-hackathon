@@ -25,4 +25,3 @@ def test_health_handles_unavailable_backend() -> None:
     api = CommerceAPIClient("http://test", transport=httpx.MockTransport(handler))
     assert api.health() is False
     api.close()
-

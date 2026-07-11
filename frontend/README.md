@@ -25,4 +25,3 @@ Set `BACKEND_BASE_URL` if the backend is not available at `http://127.0.0.1:8000
   frontend state.
 - `Reset UI session` clears Streamlit state only; it does not reset the backend's in-memory
   merchant data.
-

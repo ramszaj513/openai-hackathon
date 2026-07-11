@@ -14,10 +14,11 @@ from agent_commerce.commerce.models import (
     SearchOffersRequest,
 )
 from agent_commerce.commerce.service import CommerceService
+from agent_commerce.orchestration.agent_mcp import CurrentMCPServerStreamableHttp
 from agent_commerce.orchestration.merchant_gateway import MCPMerchantGateway
 from agent_commerce.payments.service import PaymentService
 from agent_commerce.trust.service import TrustService
-from agents.mcp import MCPServerStreamableHttp, create_static_tool_filter
+from agents.mcp import create_static_tool_filter
 
 
 def _available_port() -> int:
@@ -70,7 +71,7 @@ async def test_agent_gateway_uses_real_streamable_http_mcp(
             )
         )
         assert checkout.transaction_id == "txn-real-mcp"
-        agent_mcp = MCPServerStreamableHttp(
+        agent_mcp = CurrentMCPServerStreamableHttp(
             params={"url": f"http://127.0.0.1:{port}/mcp"},
             tool_filter=create_static_tool_filter(
                 allowed_tool_names=["search_offers", "get_offer"]

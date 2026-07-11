@@ -330,8 +330,7 @@ def render_offers() -> None:
             )
             add_local_event(
                 "Checkout created",
-                f"Merchant reserved inventory in {checkout['checkout_id']} "
-                f"v{checkout['version']}.",
+                f"Merchant reserved inventory in {checkout['checkout_id']} v{checkout['version']}.",
             )
             add_local_event(
                 "Approval requested",
@@ -355,8 +354,7 @@ def render_checkout() -> None:
         for line in checkout["lines"]:
             st.markdown(f"#### {line['product_name']}")
             st.caption(
-                f"{line['variant']} · Qty {line['quantity']} · "
-                f"Offer v{line['offer_version']}"
+                f"{line['variant']} · Qty {line['quantity']} · Offer v{line['offer_version']}"
             )
         st.markdown(f"**Delivery:** {checkout['delivery_option']['label']}")
         st.caption(f"Promised for {checkout['delivery_option']['estimated_delivery_date']}")
@@ -415,8 +413,7 @@ def render_checkout() -> None:
             st.session_state.local_events[-1] = {
                 "title": "Approval granted",
                 "detail": (
-                    f"Demo approval bound to {checkout['checkout_id']} "
-                    f"v{checkout['version']}."
+                    f"Demo approval bound to {checkout['checkout_id']} v{checkout['version']}."
                 ),
                 "status": "done",
                 "occurred_at": datetime.now().isoformat(),
@@ -459,6 +456,7 @@ def render_order() -> None:
         "SHIPPED": "DELIVERED",
     }.get(state)
     if next_state and controls[0].button(f"Advance to {next_state.title()}"):
+
         def advance() -> dict[str, Any]:
             api = client()
             try:
@@ -469,6 +467,7 @@ def render_order() -> None:
                 )
             finally:
                 api.close()
+
         updated = run_action(advance)
         if updated:
             st.session_state.order = updated
@@ -476,12 +475,14 @@ def render_order() -> None:
             st.rerun()
 
     if order["cancellable"] and controls[1].button("Cancel order"):
+
         def cancel() -> dict[str, Any]:
             api = client()
             try:
                 return api.cancel_order(order["order_id"], f"ui-cancel-{order['order_id']}")
             finally:
                 api.close()
+
         updated = run_action(cancel)
         if updated:
             st.session_state.order = updated
@@ -493,6 +494,7 @@ def render_order() -> None:
         reason = st.text_input("Return reason", value="Changed my mind")
         if controls[2].button("Create return"):
             items = {line["product_id"]: line["quantity"] for line in order["lines"]}
+
             def create_return() -> dict[str, Any]:
                 api = client()
                 try:
@@ -504,6 +506,7 @@ def render_order() -> None:
                     )
                 finally:
                     api.close()
+
             record = run_action(create_return)
             if record:
                 st.session_state.return_record = record
