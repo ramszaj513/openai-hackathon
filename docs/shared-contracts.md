@@ -217,6 +217,11 @@ Required semantics:
 - Return method and status.
 - Refund amount, currency, and status.
 
+Refund status is `PENDING`, `COMPLETED`, or `FAILED`. Provider acceptance is not completion: a
+pending refund remains pending until authoritative provider state confirms it, and mandate spend is
+restored only for a completed refund. Adding pending and failed states preserves the existing
+completed result while allowing asynchronous payment rails to report their state truthfully.
+
 ## 3. MCP commerce surface
 
 Tool names may receive a project namespace, but their semantics should remain stable.

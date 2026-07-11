@@ -31,7 +31,9 @@ class PaymentStatus(StrEnum):
 
 
 class RefundStatus(StrEnum):
+    PENDING = "PENDING"
     COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class PaymentScenario(StrEnum):

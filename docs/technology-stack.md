@@ -196,6 +196,11 @@ APP_ENV=development
 BACKEND_BASE_URL=http://localhost:8000
 MCP_BASE_URL=http://localhost:8000/mcp
 PAYMENT_PROVIDER=simulator
+STRIPE_SECRET_KEY=
+STRIPE_PAYMENT_METHOD=pm_card_visa
+STRIPE_DECLINE_PAYMENT_METHOD=pm_card_visa_chargeDeclined
+STRIPE_API_BASE=https://api.stripe.com/v1
+STRIPE_TIMEOUT_SECONDS=10
 OPENAI_AGENTS_TRACE_INCLUDE_SENSITIVE_DATA=0
 OPENAI_AGENTS_DONT_LOG_MODEL_DATA=1
 OPENAI_AGENTS_DONT_LOG_TOOL_DATA=1
@@ -263,7 +268,7 @@ Mock the OpenAI model for deterministic automated tests. Keep one explicitly inv
 1. Deterministic payment simulator.
 2. Complete agent-to-MCP-to-order flow.
 3. Reliable reapproval and refund scenarios.
-4. Optional Stripe test-mode adapter.
+4. Stripe test-mode card adapter using PaymentIntents with manual capture.
 5. Optional deployment database change to PostgreSQL.
 
 Do not block the judged flow on preview access to MPP, x402, AP2, or shared payment-token products. Reproduce their important architectural properties—scoped authority, exact binding, receipts, and pluggable rails—inside the stable contract first.

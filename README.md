@@ -87,3 +87,11 @@ npm --prefix frontend run dev
 ```
 
 Open `http://localhost:5173`. The microphone button uses OpenAI Realtime transcription and inserts live transcript deltas directly into the message composer. The standard API key remains on the backend.
+
+## Payment rails
+
+The deterministic simulator remains the default. To exercise real provider semantics in Stripe
+test mode, copy `.env.example` to the ignored `.env`, set `PAYMENT_PROVIDER=stripe`, and provide a
+`STRIPE_SECRET_KEY` beginning with `sk_test_`. The integration uses card PaymentIntents with manual
+capture, so funds are authorized only after exact checkout approval and captured only after the
+merchant confirms an order. Live-mode Stripe keys are intentionally rejected.
