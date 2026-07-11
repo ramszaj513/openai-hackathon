@@ -232,8 +232,8 @@ async def test_agent_confidently_reports_product_absent_from_catalog(
     now: datetime,
 ) -> None:
     intent = NormalizedPurchaseIntent(
-        product_query="wireless noise cancelling headphones",
-        category="headphones",
+        product_query="espresso machine",
+        category="espresso machine",
         max_budget_minor=100000,
         currency="PLN",
         purchase_if_confident=True,
@@ -260,7 +260,7 @@ async def test_agent_confidently_reports_product_absent_from_catalog(
     assert transaction.state is TransactionState.NO_MATCH
     assert transaction.selection is not None
     assert transaction.selection.confidence == 1
-    assert "wireless noise cancelling headphones" in transaction.selection.selection_reason
+    assert "espresso machine" in transaction.selection.selection_reason
 
 
 @pytest.mark.asyncio

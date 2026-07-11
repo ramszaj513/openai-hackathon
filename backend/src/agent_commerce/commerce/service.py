@@ -53,7 +53,11 @@ def _matches_product_query(offer: Offer, query: str) -> bool:
     requested = _search_tokens(query)
     if not requested:
         return False
-    attributes = " ".join(f"{key} {value}" for key, value in offer.product.attributes.items())
+    attributes = " ".join(
+        key if isinstance(value, bool) and value else f"{key} {value}"
+        for key, value in offer.product.attributes.items()
+        if not isinstance(value, bool) or value
+    )
     searchable = " ".join(
         (
             offer.product.name,
