@@ -113,9 +113,7 @@ class CommerceAPIClient:
             json={"order_id": order_id, "idempotency_key": idempotency_key},
         )
 
-    def set_order_state(
-        self, order_id: str, state: str, idempotency_key: str
-    ) -> JsonObject:
+    def set_order_state(self, order_id: str, state: str, idempotency_key: str) -> JsonObject:
         return self._object_request(
             "POST",
             f"/api/demo/orders/{order_id}/state",

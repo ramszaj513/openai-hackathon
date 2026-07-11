@@ -381,7 +381,6 @@ def render_order() -> None:
                 return updated_order, updated_transaction
             finally:
                 api.close()
-
         result = run_action(advance)
         if result:
             st.session_state.order, st.session_state.transaction = result
