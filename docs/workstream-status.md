@@ -11,7 +11,7 @@ Last team sync: _not yet recorded_
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | Agent-based semantic offer matching over broad MCP candidates | Bartosz verifies canonical live-agent selection in the UI | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
-| Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
+| Experience and integration | Bartosz | `codex/experience` | Realistically paced post-approval execution with live authoritative progress copy | Team rehearses with `DEMO_STEP_DELAY_MS=1200` | Ready to integrate |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
@@ -72,3 +72,4 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | 2026-07-11 | Bartosz workstream | Team | Auto-growing message composer and switchable persistent conversation history | Browser-only safe summary index; backend contracts unchanged | Frontend lint, 9 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Non-blocking conversation navigation while agent/API work remains in flight | View-scoped response handling; backend contracts unchanged | Frontend lint, 10 tests, and production build pass |
 | 2026-07-11 | Bartosz workstream | Team | Clarification replies and immediate optimistic conversation entries | Clarifications create a new authoritative transaction and replace the prior UI entry; backend contracts unchanged | Frontend lint, 12 tests, and production build pass |
+| 2026-07-11 | Bartosz workstream | Team | Configurable backend pacing exposes authorization, merchant confirmation, capture, and fulfillment as live approval-card states | Adds optional `DEMO_STEP_DELAY_MS`; transaction contracts unchanged | 20 focused backend tests, frontend lint, 18 tests, and production build pass |
