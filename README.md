@@ -69,3 +69,11 @@ The implementation structure inside `backend/` and `frontend/` may evolve, but t
 - Pytest, HTTPX, Ruff, and mypy for verification.
 
 See [Python technology stack](docs/technology-stack.md) for the decisions, boundaries, and planned layout.
+
+## Payment rails
+
+The deterministic simulator remains the default. To exercise real provider semantics in Stripe
+test mode, copy `.env.example` to the ignored `.env`, set `PAYMENT_PROVIDER=stripe`, and provide a
+`STRIPE_SECRET_KEY` beginning with `sk_test_`. The integration uses card PaymentIntents with manual
+capture, so funds are authorized only after exact checkout approval and captured only after the
+merchant confirms an order. Live-mode Stripe keys are intentionally rejected.

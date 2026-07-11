@@ -20,6 +20,7 @@ from agent_commerce.mcp_server import create_commerce_mcp
 from agent_commerce.orchestration.factory import create_default_orchestrator
 from agent_commerce.orchestration.service import CommerceOrchestrator
 from agent_commerce.payments import PaymentService
+from agent_commerce.payments.settings import PaymentSettings
 from agent_commerce.trust import TrustService
 
 
@@ -37,11 +38,11 @@ def create_app(
     elif trust_service is not None:
         trust = trust_service
         audit = trust.audit
-        payments = PaymentService(trust, audit=audit)
+        payments = PaymentService(trust, audit=audit, settings=PaymentSettings())
     else:
         audit = AuditLedger()
         trust = TrustService(audit=audit)
-        payments = PaymentService(trust, audit=audit)
+        payments = PaymentService(trust, audit=audit, settings=PaymentSettings())
     _wire_checkout_approval_invalidation(commerce, trust)
     agent_orchestrator = orchestrator or create_default_orchestrator(
         commerce,
@@ -78,6 +79,7 @@ def create_app(
             "NOT_CANCELLABLE": 409,
             "NOT_RETURNABLE": 409,
             "RECOVERY_REQUIRED": 503,
+            "TEMPORARILY_UNAVAILABLE": 503,
         }
         return JSONResponse(
             status_code=status_by_code.get(exc.code, 400),

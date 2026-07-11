@@ -27,11 +27,19 @@ class PaymentAdapter(Protocol):
         *,
         scenario: PaymentScenario,
         payment_id: str,
+        idempotency_key: str,
     ) -> PaymentRecord: ...
 
-    def capture(self, payment_id: str, order_id: str, amount_minor: int) -> PaymentRecord: ...
+    def capture(
+        self,
+        payment_id: str,
+        order_id: str,
+        amount_minor: int,
+        *,
+        idempotency_key: str,
+    ) -> PaymentRecord: ...
 
-    def void(self, payment_id: str) -> PaymentRecord: ...
+    def void(self, payment_id: str, *, idempotency_key: str) -> PaymentRecord: ...
 
     def refund(
         self,
@@ -40,6 +48,8 @@ class PaymentAdapter(Protocol):
         amount_minor: int,
         reason: str,
         refund_id: str,
+        *,
+        idempotency_key: str,
     ) -> tuple[PaymentRecord, RefundRecord]: ...
 
 
@@ -61,6 +71,7 @@ class SimulatorPaymentAdapter:
         *,
         scenario: PaymentScenario,
         payment_id: str,
+        idempotency_key: str,
     ) -> PaymentRecord:
         now = self._clock()
         status = (
@@ -91,7 +102,14 @@ class SimulatorPaymentAdapter:
         self.repository.save_payment(payment)
         return payment
 
-    def capture(self, payment_id: str, order_id: str, amount_minor: int) -> PaymentRecord:
+    def capture(
+        self,
+        payment_id: str,
+        order_id: str,
+        amount_minor: int,
+        *,
+        idempotency_key: str,
+    ) -> PaymentRecord:
         payment = self.repository.get_payment(payment_id)
         if payment is None:
             raise not_found("payment", payment_id)
@@ -115,7 +133,7 @@ class SimulatorPaymentAdapter:
         self.repository.save_payment(captured)
         return captured
 
-    def void(self, payment_id: str) -> PaymentRecord:
+    def void(self, payment_id: str, *, idempotency_key: str) -> PaymentRecord:
         payment = self.repository.get_payment(payment_id)
         if payment is None:
             raise not_found("payment", payment_id)
@@ -136,6 +154,8 @@ class SimulatorPaymentAdapter:
         amount_minor: int,
         reason: str,
         refund_id: str,
+        *,
+        idempotency_key: str,
     ) -> tuple[PaymentRecord, RefundRecord]:
         payment = self.repository.get_payment(payment_id)
         if payment is None:

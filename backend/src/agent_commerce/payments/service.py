@@ -28,12 +28,14 @@ from agent_commerce.payments.models import (
     RecoveryResult,
     RefundPaymentRequest,
     RefundRecord,
+    RefundStatus,
     VoidPaymentRequest,
 )
 from agent_commerce.payments.repository import (
     InMemoryPaymentRepository,
     PaymentRepository,
 )
+from agent_commerce.payments.settings import PaymentProvider, PaymentSettings
 from agent_commerce.trust import TrustService
 from agent_commerce.trust.models import ApprovalStatus
 
@@ -47,6 +49,7 @@ class PaymentService:
         repository: PaymentRepository | None = None,
         audit: AuditLedger | None = None,
         adapter: PaymentAdapter | None = None,
+        settings: PaymentSettings | None = None,
         *,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
@@ -56,10 +59,27 @@ class PaymentService:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: uuid4().hex)
         self.audit = audit or trust.audit
-        self.adapter = adapter or SimulatorPaymentAdapter(
-            self.repository,
-            clock=self._clock,
-        )
+        if adapter is not None:
+            self.adapter = adapter
+        elif settings is not None and settings.payment_provider is PaymentProvider.STRIPE:
+            from agent_commerce.payments.stripe_adapter import StripePaymentAdapter
+
+            if settings.stripe_secret_key is None:  # Guarded by PaymentSettings validation.
+                raise RuntimeError("Stripe secret key is missing")
+            self.adapter = StripePaymentAdapter(
+                self.repository,
+                clock=self._clock,
+                secret_key=settings.stripe_secret_key.get_secret_value(),
+                payment_method=settings.stripe_payment_method,
+                decline_payment_method=settings.stripe_decline_payment_method,
+                api_base=settings.stripe_api_base,
+                timeout_seconds=settings.stripe_timeout_seconds,
+            )
+        else:
+            self.adapter = SimulatorPaymentAdapter(
+                self.repository,
+                clock=self._clock,
+            )
 
     def issue_credential(self, request: IssuePaymentCredentialRequest) -> PaymentCredential:
         fingerprint = self._fingerprint(request)
@@ -183,6 +203,7 @@ class PaymentService:
                 credential,
                 scenario=request.scenario,
                 payment_id=payment_id,
+                idempotency_key=request.idempotency_key,
             )
             consumed = credential.model_copy(
                 update={"status": CredentialStatus.CONSUMED, "updated_at": self._now()}
@@ -241,7 +262,12 @@ class PaymentService:
                 return self._expect_type(cached, PaymentReceipt)
             payment = self.get_payment(request.payment_id)
             amount = request.amount_minor or payment.authorized_amount_minor
-            captured = self.adapter.capture(payment.payment_id, request.order_id, amount)
+            captured = self.adapter.capture(
+                payment.payment_id,
+                request.order_id,
+                amount,
+                idempotency_key=request.idempotency_key,
+            )
             self.trust.record_captured_spend(
                 captured.approval_id,
                 captured.payment_id,
@@ -275,7 +301,10 @@ class PaymentService:
             )
             if cached is not None:
                 return self._expect_type(cached, PaymentReceipt)
-            payment = self.adapter.void(request.payment_id)
+            payment = self.adapter.void(
+                request.payment_id,
+                idempotency_key=request.idempotency_key,
+            )
             self.trust.invalidate_approval(payment.approval_id, reason=request.reason)
             receipt = self._receipt(payment)
             self.repository.save_idempotent(
@@ -307,19 +336,25 @@ class PaymentService:
                 request.amount_minor,
                 request.reason,
                 refund_id,
+                idempotency_key=request.idempotency_key,
             )
-            self.trust.record_refund(
-                payment.approval_id,
-                refund.refund_id,
-                refund.amount_minor,
-                refund.currency,
-            )
+            if refund.status is RefundStatus.COMPLETED:
+                self.trust.record_refund(
+                    payment.approval_id,
+                    refund.refund_id,
+                    refund.amount_minor,
+                    refund.currency,
+                )
             self.repository.save_idempotent(
                 "refund_payment", request.idempotency_key, fingerprint, refund
             )
             self.audit.record(
                 transaction_id=payment.transaction_id,
-                action="refund.completed",
+                action={
+                    RefundStatus.COMPLETED: "refund.completed",
+                    RefundStatus.PENDING: "refund.pending",
+                    RefundStatus.FAILED: "refund.failed",
+                }[refund.status],
                 actor_type="payment_provider",
                 actor_id=self.adapter.name,
                 subject_type="refund",
