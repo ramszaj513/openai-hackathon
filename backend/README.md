@@ -39,6 +39,10 @@ uv run uvicorn agent_commerce.main:app --reload --app-dir backend/src
 
 The MCP endpoint is `http://127.0.0.1:8000/mcp`; REST endpoints are under `/api`.
 
+Set `DEMO_STEP_DELAY_MS=1200` to pace the post-approval authorization, merchant
+commit, order confirmation, and capture boundaries for a live demonstration.
+The default is `0`, so automated tests and normal development remain fast.
+
 ## Tests
 
 - `tests/unit`: commerce rules, idempotency, expiry, approval binding, cancellation, returns.
