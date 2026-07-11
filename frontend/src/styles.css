@@ -49,13 +49,6 @@ svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .conversation-link span:last-child { min-width: 0; display: grid; gap: 3px; }
 .conversation-link strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; max-width: 164px; }
 .conversation-link small { color: #9fbab0; font-size: 11px; }
-.sidebar__bottom { flex: 0 0 auto; margin-top: 18px; }
-.trust-note { display: flex; gap: 11px; padding: 15px; background: rgba(6, 24, 19, .25); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; }
-.trust-note svg { width: 19px; color: #b9dfce; }
-.trust-note strong { font-size: 12px; }
-.trust-note p { margin: 5px 0 0; color: #a9bdb6; font-size: 11px; line-height: 1.45; }
-.api-status { display: flex; align-items: center; padding: 17px 7px 0; font-size: 11px; color: #a9bdb6; }
-.api-status strong { margin-left: auto; color: #dce8e3; font-weight: 600; }
 .status-dot { width: 7px; height: 7px; display: inline-block; background: #a0a7a4; border-radius: 50%; margin-right: 7px; }
 .status-dot--online { background: #6fc49b; box-shadow: 0 0 0 3px rgba(111,196,155,.13); }
 
@@ -66,9 +59,6 @@ svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .topbar__title small { color: var(--muted); font-size: 10px; }
 .topbar__title .status-dot { width: 5px; height: 5px; margin-right: 4px; }
 .menu-button { display: none; }
-.refresh-button { position: absolute; right: 30px; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; padding: 8px; }
-.refresh-button svg { width: 16px; }
-.refresh-button:disabled { opacity: .45; }
 
 .conversation { width: min(100%, 850px); margin: auto; padding: 50px 38px 240px; }
 .conversation--active { margin-top: 0; }
@@ -180,7 +170,7 @@ svg { width: 20px; height: 20px; flex: 0 0 auto; }
   .sidebar__close, .menu-button { display: grid; }
   .scrim { display: block; position: fixed; z-index: 15; inset: 0; border: 0; background: rgba(12,27,23,.35); backdrop-filter: blur(2px); }
   .main { min-height: 100vh; }
-  .topbar { padding: 0 15px; }.topbar__title { margin-left: auto; margin-right: auto; }.refresh-button { right: 11px; }.refresh-button span { display: none; }
+  .topbar { padding: 0 15px; }.topbar__title { margin-left: auto; margin-right: auto; }
   .composer-wrap { left: 0; padding-inline: 14px; }
   .conversation { padding-inline: 18px; }
 }

@@ -144,6 +144,9 @@ describe("single-chat commerce experience", () => {
         "Buy a monitor\n\nAdditional clarification: Up to 1,200 PLN",
       ),
     );
+    expect(screen.getByText("Buy a monitor")).toHaveClass("user-bubble");
+    expect(screen.getByText("Up to 1,200 PLN")).toHaveClass("user-bubble");
+    expect(screen.queryByText("Buy a monitor\n\nAdditional clarification: Up to 1,200 PLN")).not.toBeInTheDocument();
   });
 
   it("states clearly when the agent found no suitable offer", async () => {

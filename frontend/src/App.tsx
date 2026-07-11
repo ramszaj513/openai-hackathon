@@ -17,6 +17,14 @@ import {
 } from "./components/Icons";
 import { api, APIError } from "./lib/api";
 import {
+  appendChatMessage,
+  ensureChatMessage,
+  loadChatMessages,
+  moveChatMessages,
+  removeChatMessages,
+  type ChatMessage,
+} from "./lib/chatMessages";
+import {
   ACTIVE_CONVERSATION_KEY,
   loadConversationIndex,
   pendingConversation,
@@ -42,16 +50,18 @@ function App() {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [events, setEvents] = useState<DomainEvent[]>([]);
   const [activities, setActivities] = useState<TransactionActivity[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const activeId = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
+    return activeId ? loadChatMessages(activeId) : [];
+  });
   const [conversations, setConversations] = useState<ConversationSummary[]>(loadConversationIndex);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() =>
     localStorage.getItem(ACTIVE_CONVERSATION_KEY),
   );
-  const [online, setOnline] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<BusyAction>(() =>
     localStorage.getItem(ACTIVE_CONVERSATION_KEY) ? "refreshing" : null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [returnReason, setReturnReason] = useState("Changed my mind");
@@ -90,11 +100,23 @@ function App() {
     };
   }
 
+  function transcriptFor(next: AgentTransaction, replaceTransactionId?: string) {
+    let transcript = replaceTransactionId
+      ? moveChatMessages(replaceTransactionId, next.transaction_id, next.raw_request)
+      : loadChatMessages(next.transaction_id, next.raw_request);
+    if (next.state === "CLARIFICATION_REQUIRED" && next.intent?.clarification_questions.length) {
+      transcript = ensureChatMessage(next.transaction_id, {
+        messageId: `${next.transaction_id}:clarification:${next.updated_at}`,
+        role: "assistant",
+        content: next.intent.clarification_questions.join(" "),
+        createdAt: next.updated_at,
+      });
+    }
+    return transcript;
+  }
+
   useEffect(() => {
     let active = true;
-    void api.health().then((status) => {
-      if (active) setOnline(status);
-    });
     const saved = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
     if (saved) {
       const view = viewVersion.current;
@@ -113,6 +135,7 @@ function App() {
           setPayment(restoredPayment);
           setEvents(restoredEvents);
           replaceActivities(restoredActivities);
+          setMessages(transcriptFor(restored));
           const updatedIndex = upsertConversation(loadConversationIndex(), restored);
           saveConversationIndex(updatedIndex);
           setConversations(updatedIndex);
@@ -135,7 +158,7 @@ function App() {
 
   useEffect(() => {
     conversationEnd.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
-  }, [transaction, order, payment, activities, busy, error]);
+  }, [transaction, order, payment, activities, messages, busy, error]);
 
   async function hydrate(next: AgentTransaction, view: number) {
     const [nextOrder, nextPayment, nextEvents, nextActivities] = await Promise.all([
@@ -164,6 +187,7 @@ function App() {
     view: number,
     replaceTransactionId?: string,
   ) {
+    const nextMessages = transcriptFor(next, replaceTransactionId);
     remember(next, replaceTransactionId);
     const targetView =
       view === viewVersion.current
@@ -174,7 +198,7 @@ function App() {
           : null;
     if (targetView === null) return;
     setTransaction(next);
-    setPendingMessage(null);
+    setMessages(nextMessages);
     activeConversationIdRef.current = next.transaction_id;
     setActiveConversationId(next.transaction_id);
     localStorage.setItem(ACTIVE_CONVERSATION_KEY, next.transaction_id);
@@ -209,7 +233,8 @@ function App() {
       activeConversationIdRef.current = replaceTransactionId;
       setActiveConversationId(replaceTransactionId);
     }
-    setPendingMessage(intent);
+    const messageOwnerId = clarification ? transaction.transaction_id : replaceTransactionId;
+    setMessages(appendChatMessage(messageOwnerId, "user", intent));
     setError(null);
     setBusy("starting");
     let acceptedTransactionId: string | null = null;
@@ -239,6 +264,7 @@ function App() {
       if (view === viewVersion.current) setDraft("");
     } catch (cause) {
       if (!clarification && acceptedTransactionId === null) {
+        removeChatMessages(replaceTransactionId);
         setConversations((current) => {
           const updated = current.filter(
             (conversation) => conversation.transactionId !== replaceTransactionId,
@@ -249,9 +275,9 @@ function App() {
         if (view === viewVersion.current) {
           activeConversationIdRef.current = null;
           setActiveConversationId(null);
+          setMessages([]);
         }
       }
-      if (view === viewVersion.current) setPendingMessage(null);
       showError(cause, view);
     } finally {
       if (view === viewVersion.current) setBusy(null);
@@ -266,23 +292,6 @@ function App() {
     const stopFollowing = followActivity(transaction.transaction_id, view);
     try {
       const next = await api.approve(transaction);
-      await applyResult(next, view);
-    } catch (cause) {
-      showError(cause, view);
-    } finally {
-      stopFollowing();
-      if (view === viewVersion.current) setBusy(null);
-    }
-  }
-
-  async function refresh() {
-    if (!transaction) return;
-    const view = viewVersion.current;
-    setError(null);
-    setBusy("refreshing");
-    const stopFollowing = followActivity(transaction.transaction_id, view);
-    try {
-      const next = await api.resume(transaction.transaction_id);
       await applyResult(next, view);
     } catch (cause) {
       showError(cause, view);
@@ -368,9 +377,9 @@ function App() {
     setPayment(null);
     setEvents([]);
     replaceActivities([]);
+    setMessages(loadChatMessages(transactionId));
     setBusy("refreshing");
     setError(null);
-    setPendingMessage(null);
     setConsent(false);
     setSidebarOpen(false);
     try {
@@ -395,9 +404,9 @@ function App() {
     setPayment(null);
     setEvents([]);
     replaceActivities([]);
+    setMessages([]);
     setError(null);
     setBusy(null);
-    setPendingMessage(null);
     setConsent(false);
     setDraft("");
     setSidebarOpen(false);
@@ -432,10 +441,6 @@ function App() {
           </div>
         </div>
 
-        <div className="sidebar__bottom">
-          <div className="trust-note"><ShieldIcon /><div><strong>Protected by design</strong><p>Approval is bound to the exact checkout. Arc never handles reusable card details.</p></div></div>
-          <div className="api-status"><span className={`status-dot ${online ? "status-dot--online" : ""}`} /> <span>Commerce API</span><strong>{online === null ? "Checking" : online ? "Online" : "Offline"}</strong></div>
-        </div>
       </aside>
       {sidebarOpen && <button className="scrim" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)} />}
 
@@ -443,22 +448,16 @@ function App() {
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar"><MenuIcon /></button>
           <div className="topbar__title"><span>Commerce agent</span><small><span className="status-dot status-dot--online" /> Ready to act</small></div>
-          {transaction && <button className="refresh-button" onClick={() => void refresh()} disabled={Boolean(busy)}><RefreshIcon /> Refresh</button>}
         </header>
 
         <section className={`conversation ${hasStarted ? "conversation--active" : ""}`} aria-live="polite">
           {!hasStarted && <Welcome onPrompt={() => setDraft(CANONICAL_REQUEST)} />}
 
-          {transaction && <UserMessage>{transaction.raw_request}</UserMessage>}
-          {busy === "refreshing" && !transaction && <Thinking label="Loading conversation…" />}
-
-          {transaction?.state === "CLARIFICATION_REQUIRED" && transaction.intent && (
-            <AssistantMessage>
-              <div className="assistant-copy"><h2>I need one more detail</h2><p>{transaction.intent.clarification_questions.join(" ")}</p></div>
-            </AssistantMessage>
+          {messages.map((message) => message.role === "user"
+            ? <UserMessage key={message.messageId}>{message.content}</UserMessage>
+            : <AssistantMessage key={message.messageId}><div className="assistant-copy"><h2>I need one more detail</h2><p>{message.content}</p></div></AssistantMessage>
           )}
-
-          {pendingMessage && <UserMessage>{pendingMessage}</UserMessage>}
+          {busy === "refreshing" && !transaction && <Thinking label="Loading conversation…" />}
           {busy === "starting" && <Thinking />}
 
           {transaction?.state === "FAILED" && (
