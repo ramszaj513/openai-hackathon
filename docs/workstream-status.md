@@ -11,7 +11,7 @@ Last team sync: _not yet recorded_
 | Agent and orchestration | Maciej | `codex/agent-orchestration` | OpenAI/MCP intent-to-resolution transaction orchestration | Bartosz integrates `AgentTransaction` and approval/event endpoints | Ready to integrate |
 | Commerce and MCP | Kuba | `codex/commerce-mcp` | FastAPI merchant domain plus FastMCP tools | Maciej/Piotr/Bartosz review the implemented contracts | Ready to integrate |
 | Payments and trust | Piotr | `codex/payments-trust` | Checkout-bound trust, payment simulator, audit, and recovery | Maciej/Bartosz integrate policy decisions and approval/payment UI | Ready to integrate |
-| Experience and integration | Bartosz | `codex/experience` | React single-chat intent, approval, transaction, and resolution UI | Team reviews and rehearses the canonical browser flow | Ready to integrate |
+| Experience and integration | Bartosz | `codex/experience` | Auto-growing chat composer and persistent multi-conversation sidebar | Team reviews the updated browser interaction | Ready to integrate |
 
 Allowed status values: `Not started`, `In progress`, `Ready to integrate`, `Integrated`, or `Blocked: <reason>`.
 
@@ -69,3 +69,6 @@ Use one row per meaningful handoff. Detailed notes can live in the linked change
 | 2026-07-11 | Piotr workstream | Maciej, Kuba, Bartosz | Trust, payment, audit, and recovery services ready for integration | Adds product category to checkout lines; trust/payment REST surfaces and automatic checkout invalidation | `backend/PAYMENTS_TRUST.md`; trust/payment tests |
 | 2026-07-11 | Maciej workstream | Kuba, Piotr, Bartosz | Agent orchestration and transaction projection ready for integration | Adds merchant lookup by checkout; agent REST surface; OpenAI/MCP and deterministic runtime modes | `backend/AGENT_ORCHESTRATION.md`; orchestration and MCP integration tests |
 | 2026-07-11 14:57 CEST | Bartosz workstream | Team | Responsive single-chat React experience from intent through approval, purchase, tracking, and resolution | Frontend runtime changed; REST/domain contracts unchanged | Frontend lint/test/build and 40 backend tests pass |
+| 2026-07-11 | Bartosz workstream | Team | Auto-growing message composer and switchable persistent conversation history | Browser-only safe summary index; backend contracts unchanged | Frontend lint, 9 tests, and production build pass |
+| 2026-07-11 | Bartosz workstream | Team | Non-blocking conversation navigation while agent/API work remains in flight | View-scoped response handling; backend contracts unchanged | Frontend lint, 10 tests, and production build pass |
+| 2026-07-11 | Bartosz workstream | Team | Clarification replies and immediate optimistic conversation entries | Clarifications create a new authoritative transaction and replace the prior UI entry; backend contracts unchanged | Frontend lint, 12 tests, and production build pass |

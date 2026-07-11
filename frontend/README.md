@@ -25,7 +25,7 @@ Open `http://localhost:5173`. Vite proxies `/api` and `/health` to `http://127.0
 - The browser uses REST only and never imports backend services or repositories.
 - Totals, approval validity, payment authorization, order confirmation, refunds, and state transitions remain backend-authoritative.
 - Explicit consent includes the checkout ID, version, exact total, currency, merchant-bound proposal hash, and expiry.
-- The active transaction ID is kept in local storage only so the UI can reconstruct safe projections after a refresh.
+- A local conversation index stores transaction IDs and safe display summaries so users can switch between transactions. Opening one always reconstructs current projections from the backend.
 
 ## Verify
 
